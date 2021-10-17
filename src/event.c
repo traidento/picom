@@ -449,14 +449,26 @@ static inline void ev_property_notify(session_t *ps, xcb_property_notify_event_t
 	}
 
 	if (ps->root == ev->window) {
-        if (ev->atom == ps->atoms->a_NET_CURRENT_MON_CENTER) {
-            winprop_t prop = x_get_prop(ps->c, ps->root, ps->atoms->a_NET_CURRENT_MON_CENTER, 2L, XCB_ATOM_CARDINAL, 32);
-            if (prop.nitems == 2) {
-                ps->selmon_center_x = prop.p32[0];
-                ps->selmon_center_y = prop.p32[1];
-            }
-            free_winprop(&prop);
-        }
+		if (ev->atom == ps->atoms->a_NET_CURRENT_MON_CENTER) {
+			winprop_t prop = x_get_prop(ps->c, ps->root, ps->atoms->a_NET_CURRENT_MON_CENTER,
+							2L, XCB_ATOM_CARDINAL, 32);
+			if (prop.nitems == 2) {
+				ps->selmon_center_x = prop.p32[0];
+				ps->selmon_center_y = prop.p32[1];
+			}
+			free_winprop(&prop);
+		}
+
+		// If desktop number property changes
+		if (ev->atom == ps->atoms->a_NET_CURRENT_DESKTOP) {
+			auto prop = x_get_prop(ps->c, ps->root, ps->atoms->a_NET_CURRENT_DESKTOP,
+							1L, XCB_ATOM_CARDINAL, 32);
+
+			if (prop.nitems) {
+				ps->root_desktop_switch_direction = ((int)*prop.c32) - ps->root_desktop_num;
+				ps->root_desktop_num = (int)*prop.c32;
+			}
+		}
 
 		if (ps->o.use_ewmh_active_win && ps->atoms->a_NET_ACTIVE_WINDOW == ev->atom) {
 			// to update focus
