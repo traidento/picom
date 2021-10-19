@@ -1589,7 +1589,9 @@ void win_on_win_size_change(session_t *ps, struct managed_win *w) {
 	       w->state != WSTATE_UNMAPPING);
 
 	// Invalidate the shadow we built
-	win_set_flags(w, WIN_FLAGS_IMAGES_STALE);
+	if (w->state != WSTATE_DESTROYING)
+		win_set_flags(w, WIN_FLAGS_IMAGES_STALE);
+
 	ps->pending_updates = true;
 	free_paint(ps, &w->shadow_paint);
 }
@@ -2720,17 +2722,11 @@ void unmap_win_start(session_t *ps, struct managed_win *w) {
 	w->opacity_target_old = fmax(w->opacity_target, w->opacity_target_old);
 	w->opacity_target = win_calc_opacity_target(ps, w);
 
-<<<<<<< HEAD
-    if (ps->o.animations && ps->o.animation_for_unmap_window != OPEN_WINDOW_ANIMATION_NONE && ps->o.wintype_option[w->window_type].animation) {
-        w->dwm_mask = ANIM_UNMAP;
-        init_animation(ps, w);
-=======
 	if (ps->o.animations &&
 		ps->o.animation_for_unmap_window != OPEN_WINDOW_ANIMATION_NONE &&
 		ps->o.wintype_option[w->window_type].animation != 0) 
 	{
 		init_animation_unmap(ps, w);
->>>>>>> 0882542 (Add unmap and workspace switch animation)
 
 		double x_dist = w->animation_dest_center_x - w->animation_center_x;
 		double y_dist = w->animation_dest_center_y - w->animation_center_y;
@@ -2750,11 +2746,7 @@ void unmap_win_start(session_t *ps, struct managed_win *w) {
 												w->old_win_image);
 			w->old_win_image = NULL;
 		}
-<<<<<<< HEAD
-    }
-=======
 	}
->>>>>>> 0882542 (Add unmap and workspace switch animation)
 
 #ifdef CONFIG_DBUS
 	// Send D-Bus signal
@@ -3239,10 +3231,6 @@ win_stack_find_next_managed(const session_t *ps, const struct list_node *i) {
 /// Return whether this window is mapped on the X server side
 bool win_is_mapped_in_x(const struct managed_win *w) {
 	return w->state == WSTATE_MAPPING || w->state == WSTATE_FADING ||
-<<<<<<< HEAD
-	       w->state == WSTATE_MAPPED || w->state == WSTATE_DESTROYING || (w->flags & WIN_FLAGS_MAPPED);
-=======
 	       w->state == WSTATE_MAPPED || w->state == WSTATE_UNMAPPING ||
-	       (w->flags & WIN_FLAGS_MAPPED);
->>>>>>> 0882542 (Add unmap and workspace switch animation)
+	       w->state == WSTATE_DESTROYING || (w->flags & WIN_FLAGS_MAPPED);
 }
