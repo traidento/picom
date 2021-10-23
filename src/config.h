@@ -225,6 +225,10 @@ typedef struct options {
 	double animation_window_mass;
 	/// Animation dampening
 	double animation_dampening;
+	/// Animation delta. In milliseconds.
+	double animation_delta;
+	/// Whether to force animations to not miss a beat
+	bool animation_force_steps;
 	/// Whether to clamp animations
 	bool animation_clamping;
 	/// Animation blacklist. A linked list of conditions.
