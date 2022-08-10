@@ -553,7 +553,7 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 	// --animation-stiffness
 	config_lookup_float(&cfg, "animation-stiffness", &opt->animation_stiffness);
 	// --animation-stiffness-curtag
-	config_lookup_float(&cfg, "animation-stiffness-curtag", &opt->animation_stiffness);
+	config_lookup_float(&cfg, "animation-stiffness-curtag", &opt->animation_stiffness_curtag);
 	// --animation-window-mass
 	config_lookup_float(&cfg, "animation-window-mass", &opt->animation_window_mass);
 	// --animation-dampening
