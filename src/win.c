@@ -557,7 +557,7 @@ void win_process_update_flags(session_t *ps, struct managed_win *w) {
 
 		// Update window geometry
 		} else if (ps->o.animations) {
-			if (!was_visible || (w->pending_g.y > 0 && w->g.y < 0)) {
+			if (!was_visible || (w->pending_g.y > 0 && w->g.y < 0 && abs(w->pending_g.y - w->g.y) >= w->g.height)) {
 				// Set window-open animation
 				init_animation(ps, w);
 
