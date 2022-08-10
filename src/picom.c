@@ -653,7 +653,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 
 		// IMPORTANT: These window animation steps must happen before any other
 		// [pre]processing. This is because it changes the window's geometry.
-		if (ps->o.animations && 
+		if (ps->o.animations &&
 			!isnan(w->animation_progress) && w->animation_progress != 1.0 &&
 			ps->o.wintype_option[w->window_type].animation != 0 &&
 			win_is_mapped_in_x(w))
@@ -664,12 +664,13 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 				w->animation_dest_center_y - w->animation_center_y;
 			double neg_displacement_w = w->animation_dest_w - w->animation_w;
 			double neg_displacement_h = w->animation_dest_h - w->animation_h;
+            double animation_stiffness = w->pending_g.y < 0 ? ps->o.animation_stiffness_curtag : ps->o.animation_stiffness;
 			double acceleration_x =
-				(ps->o.animation_stiffness * neg_displacement_x -
+				(animation_stiffness * neg_displacement_x -
 					ps->o.animation_dampening * w->animation_velocity_x) /
 				ps->o.animation_window_mass;
 			double acceleration_y =
-				(ps->o.animation_stiffness * neg_displacement_y -
+				(animation_stiffness * neg_displacement_y -
 					ps->o.animation_dampening * w->animation_velocity_y) /
 				ps->o.animation_window_mass;
 			double acceleration_w =

@@ -557,7 +557,7 @@ void win_process_update_flags(session_t *ps, struct managed_win *w) {
 
 		// Update window geometry
 		} else if (ps->o.animations) {
-			if (!was_visible) {
+			if (!was_visible || (w->pending_g.y > 0 && w->g.y < 0)) {
 				// Set window-open animation
 				init_animation(ps, w);
 
@@ -2183,7 +2183,7 @@ static void unmap_win_finish(session_t *ps, struct managed_win *w) {
 	// Try again at binding images when the window is mapped next time
 	win_clear_flags(w, WIN_FLAGS_IMAGE_ERROR);
 
-	// Flag window so that it gets animated when it reapears 
+	// Flag window so that it gets animated when it reapears
 	// in case it wasn't destroyed
 	win_set_flags(w, WIN_FLAGS_POSITION_STALE);
 	win_set_flags(w, WIN_FLAGS_SIZE_STALE);

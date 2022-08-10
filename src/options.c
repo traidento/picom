@@ -476,11 +476,12 @@ static const struct option longopts[] = {
     {"no-ewmh-fullscreen", no_argument, NULL, 803},
     {"animations", no_argument, NULL, 804},
     {"animation-stiffness", required_argument, NULL, 805},
-    {"animation-dampening", required_argument, NULL, 806},
-    {"animation-window-mass", required_argument, NULL, 807},
-    {"animation-clamping", no_argument, NULL, 808},
-    {"animation-for-open-window", required_argument, NULL, 809},
-    {"animation-for-transient-window", required_argument, NULL, 810},
+    {"animation-stiffness-curtag", required_argument, NULL, 806},
+    {"animation-dampening", required_argument, NULL, 807},
+    {"animation-window-mass", required_argument, NULL, 808},
+    {"animation-clamping", no_argument, NULL, 809},
+    {"animation-for-open-window", required_argument, NULL, 810},
+    {"animation-for-transient-window", required_argument, NULL, 811},
     // Must terminate with a NULL entry
     {NULL, 0, NULL, 0},
 };
@@ -893,18 +894,22 @@ bool get_cfg(options_t *opt, int argc, char *const *argv, bool shadow_enable,
 			opt->animation_stiffness = atof(optarg);
 			break;
 		case 806:
+			// --animation-stiffness-curtag
+			opt->animation_stiffness_curtag = atof(optarg);
+			break;
+		case 807:
 			// --animation-dampening
 			opt->animation_dampening = atof(optarg);
 			break;
-		case 807:
+		case 808:
 			// --animation-window-masss
 			opt->animation_window_mass = atof(optarg);
 			break;
-		case 808:
+		case 809:
 			// --animation-clamping
 			opt->animation_clamping = true;
 			break;
-		case 809: {
+		case 810: {
 			// --animation-for-open-window
 			enum open_window_animation animation = parse_open_window_animation(optarg);
 			if (animation >= OPEN_WINDOW_ANIMATION_INVALID) {
@@ -914,7 +919,7 @@ bool get_cfg(options_t *opt, int argc, char *const *argv, bool shadow_enable,
 			}
 			break;
 		}
-		case 810: {
+		case 811: {
 			// --animation-for-transient-window
 			enum open_window_animation animation = parse_open_window_animation(optarg);
 			if (animation >= OPEN_WINDOW_ANIMATION_INVALID) {

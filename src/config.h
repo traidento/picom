@@ -191,6 +191,8 @@ typedef struct options {
 	enum open_window_animation animation_for_transient_window;
 	/// Spring stiffness for animation
 	double animation_stiffness;
+	/// Spring stiffness for current tag animation
+	double animation_stiffness_curtag;
 	/// Window mass for animation
 	double animation_window_mass;
 	/// Animation dampening
