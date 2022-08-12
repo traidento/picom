@@ -528,10 +528,11 @@ static void init_animation(session_t *ps, struct managed_win *w) {
     }
     case OPEN_WINDOW_ANIMATION_SLIDE_IN_CENTER: {
         if (w->xinerama_scr == -1) {
-            w->animation_center_x = ((ps->screen_reg.extents.x2 + ps->screen_reg.extents.x1) / 2);
+            log_warn("EXTENTS ");
+            w->animation_center_x = (ps->screen_reg.extents.x2 + (ps->screen_reg.extents.x1 + ps->screen_reg.extents.x1)/2) ;
         } else  {
             auto e = pixman_region32_extents(&ps->xinerama_scr_regs[w->xinerama_scr]);
-            w->animation_center_x = ((e->x1 + e->x2) / 2);
+            w->animation_center_x = (e->x2 + (e->x2 - e->x1) / 2);
         }
 		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5 - ps->root_height;
 		w->animation_w = w->pending_g.width;
@@ -547,13 +548,13 @@ static void init_animation(session_t *ps, struct managed_win *w) {
     }
     case OPEN_WINDOW_ANIMATION_SLIDE_OUT_CENTER: {
         if (w->xinerama_scr == -1) {
-            w->pending_g.x = ((ps->screen_reg.extents.x2 + ps->screen_reg.extents.x1) / 2) - w->pending_g.width * 0.5;
+            w->animation_dest_center_x = ((ps->screen_reg.extents.x2 + ps->screen_reg.extents.x1) / 2) - w->pending_g.width * 0.5;
         } else  {
             auto e = pixman_region32_extents(&ps->xinerama_scr_regs[w->xinerama_scr]);
-            w->pending_g.x = ((e->x1 + e->x2) / 2) - w->pending_g.width * 0.5;
+            w->animation_dest_center_x = ((e->x1 + e->x2) / 2) - w->pending_g.width * 0.5;
         }
-        w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-		w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5 + ps->root_height;
+        //w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
+		w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5 - ps->root_height;
 		w->animation_dest_w = w->pending_g.width;
 		w->animation_dest_h = w->pending_g.height;
         break;
