@@ -440,6 +440,7 @@ static void win_update_properties(session_t *ps, struct managed_win *w) {
 }
 
 static void init_animation(session_t *ps, struct managed_win *w) {
+    static double *anim_x, *anim_y, *anim_w, *anim_h;
 	enum open_window_animation animation = ps->o.animation_for_open_window;
 
 	if (w->window_type != WINTYPE_TOOLTIP &&
@@ -448,8 +449,19 @@ static void init_animation(session_t *ps, struct managed_win *w) {
 		animation = ps->o.animation_for_transient_window;
 	}
 
+    anim_x = &w->animation_center_x, anim_y = &w->animation_center_y;
+    anim_w = &w->animation_w, anim_h = &w->animation_h;
 	if (ps->o.wintype_option[w->window_type].animation < OPEN_WINDOW_ANIMATION_INVALID)
 		animation = ps->o.wintype_option[w->window_type].animation;
+    else if (w->dwm_mask & ANIM_PREV_TAG)
+        animation = ps->o.animation_for_prev_tag;
+    else if (w->dwm_mask & ANIM_NEXT_TAG)
+        animation = ps->o.animation_for_next_tag;
+    else if (w->dwm_mask & ANIM_UNMAP) {
+        animation = ps->o.animation_for_unmap_window;
+        anim_x = &w->animation_dest_center_x, anim_y = &w->animation_dest_center_y;
+        anim_w = &w->animation_dest_w, anim_h = &w->animation_dest_h;
+    }
 
 	switch (animation) {
 	case OPEN_WINDOW_ANIMATION_NONE: { // No animation
@@ -466,47 +478,94 @@ static void init_animation(session_t *ps, struct managed_win *w) {
 		    sqrt(ps->root_width * ps->root_width + ps->root_height * ps->root_height);
 
 		// Set animation
-		w->animation_center_x = ps->root_width * 0.5 + radius * cos(angle);
-		w->animation_center_y = ps->root_height * 0.5 + radius * sin(angle);
-		w->animation_w = 0;
-		w->animation_h = 0;
+		*anim_x = ps->root_width * 0.5 + radius * cos(angle);
+		*anim_y = ps->root_height * 0.5 + radius * sin(angle);
+		*anim_w  = 0;
+		*anim_h = 0;
 		break;
 	}
 	case OPEN_WINDOW_ANIMATION_ZOOM: { // Zoom-in the image, without changing its location
-		w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5;
-		w->animation_w = 0;
-		w->animation_h = 0;
+		*anim_x = w->pending_g.x + w->pending_g.width * 0.5;
+		*anim_y = w->pending_g.y + w->pending_g.height * 0.5;
+		*anim_w = 0;
+		*anim_h = 0;
 		break;
 	}
 	case OPEN_WINDOW_ANIMATION_SLIDE_UP: { // Slide up the image, without changing its location
-		w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-		w->animation_center_y = w->pending_g.y + w->pending_g.height;
-		w->animation_w = w->pending_g.width;
-		w->animation_h = 0;
+		*anim_x = w->pending_g.x + w->pending_g.width * 0.5;
+		*anim_y = w->pending_g.y + w->pending_g.height;
+		*anim_w = w->pending_g.width;
+		*anim_h = 0;
 		break;
 	}
 	case OPEN_WINDOW_ANIMATION_SLIDE_DOWN: { // Slide down the image, without changing its location
-		w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-		w->animation_center_y = w->pending_g.y;
-		w->animation_w = w->pending_g.width;
-		w->animation_h = 0;
+		*anim_x = w->pending_g.x + w->pending_g.width * 0.5;
+		*anim_y = w->pending_g.y;
+		*anim_w = w->pending_g.width;
+		*anim_h = 0;
 		break;
 	}
 	case OPEN_WINDOW_ANIMATION_SLIDE_LEFT: { // Slide left the image, without changing its location
-		w->animation_center_x = w->pending_g.x + w->pending_g.width;
-		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5;
-		w->animation_w = 0;
-		w->animation_h = w->pending_g.height;
+		*anim_x = w->pending_g.x + w->pending_g.width;
+		*anim_y = w->pending_g.y + w->pending_g.height * 0.5;
+		*anim_w = 0;
+		*anim_h = w->pending_g.height;
 		break;
 	}
 	case OPEN_WINDOW_ANIMATION_SLIDE_RIGHT: { // Slide right the image, without changing its location
-		w->animation_center_x = w->pending_g.x;
-		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5;
-		w->animation_w = 0;
-		w->animation_h = w->pending_g.height;
+		*anim_x = w->pending_g.x;
+		*anim_y = w->pending_g.y + w->pending_g.height * 0.5;
+		*anim_w = 0;
+		*anim_h = w->pending_g.height;
 		break;
 	}
+    case OPEN_WINDOW_ANIMATION_SLIDE_IN: {
+        w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
+		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5 - ps->root_height;
+		w->animation_w = w->pending_g.width;
+		w->animation_h = w->pending_g.height;
+        break;
+    }
+    case OPEN_WINDOW_ANIMATION_SLIDE_IN_CENTER: {
+        if (w->xinerama_scr == -1) {
+            w->animation_center_x = ((ps->screen_reg.extents.x2 + ps->screen_reg.extents.x1) / 2);
+        } else  {
+            auto e = pixman_region32_extents(&ps->xinerama_scr_regs[w->xinerama_scr]);
+            w->animation_center_x = ((e->x1 + e->x2) / 2);
+        }
+		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5 - ps->root_height;
+		w->animation_w = w->pending_g.width;
+		w->animation_h = w->pending_g.height;
+        break;
+    }
+    case OPEN_WINDOW_ANIMATION_SLIDE_OUT: {
+        w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
+		w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5 + ps->root_height;
+		w->animation_dest_w = w->pending_g.width;
+		w->animation_dest_h = w->pending_g.height;
+        break;
+    }
+    case OPEN_WINDOW_ANIMATION_SLIDE_OUT_CENTER: {
+        if (w->xinerama_scr == -1) {
+            w->pending_g.x = ((ps->screen_reg.extents.x2 + ps->screen_reg.extents.x1) / 2) - w->pending_g.width * 0.5;
+        } else  {
+            auto e = pixman_region32_extents(&ps->xinerama_scr_regs[w->xinerama_scr]);
+            w->pending_g.x = ((e->x1 + e->x2) / 2) - w->pending_g.width * 0.5;
+        }
+        w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
+		w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5 + ps->root_height;
+		w->animation_dest_w = w->pending_g.width;
+		w->animation_dest_h = w->pending_g.height;
+        break;
+    }
+    case OPEN_WINDOW_ANIMATION_MINIMIZE: {
+        w->animation_dest_center_x = (ps->root_width) / 2;
+        w->animation_dest_center_y = (ps->root_height) / 2;
+		w->animation_dest_w = 0;
+		w->animation_dest_h = 0;
+        w->dwm_mask = 16;
+        break;
+    }
 	case OPEN_WINDOW_ANIMATION_INVALID: assert(false); break;
 	}
 }
@@ -557,22 +616,27 @@ void win_process_update_flags(session_t *ps, struct managed_win *w) {
 
 		// Update window geometry
 		} else if (ps->o.animations) {
-			if (!was_visible || (w->pending_g.y > 0 && w->g.y < 0 && abs(w->pending_g.y - w->g.y) >= w->g.height)) {
+            if (w->pending_g.y < 0 && w->g.y > 0 && abs(w->pending_g.y - w->g.y) >= w->pending_g.height)
+                w->dwm_mask = ANIM_PREV_TAG;
+            else if (w->pending_g.y > 0 && w->g.y < 0 && abs(w->pending_g.y - w->g.y) >= w->pending_g.height)
+                w->dwm_mask = ANIM_NEXT_TAG;
+
+			if (!was_visible || w->dwm_mask) {
 				// Set window-open animation
 				init_animation(ps, w);
 
-				w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-				w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5;
-				w->animation_dest_w = w->pending_g.width;
-				w->animation_dest_h = w->pending_g.height;
-
-				w->g.x = (int16_t)round(w->animation_center_x -
-										w->animation_w * 0.5);
-				w->g.y = (int16_t)round(w->animation_center_y -
-										w->animation_h * 0.5);
-				w->g.width = (uint16_t)round(w->animation_w);
-				w->g.height = (uint16_t)round(w->animation_h);
-
+                if (!(w->dwm_mask & 16)) {
+                    w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
+                    w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5;
+                    w->animation_dest_w = w->pending_g.width;
+                    w->animation_dest_h = w->pending_g.height;
+                    w->g.x = (int16_t)round(w->animation_center_x -
+                                            w->animation_w * 0.5);
+                    w->g.y = (int16_t)round(w->animation_center_y -
+                                            w->animation_h * 0.5);
+                    w->g.width = (uint16_t)round(w->animation_w);
+                    w->g.height = (uint16_t)round(w->animation_h);
+                }
 			} else {
 				w->animation_dest_center_x =
 				    w->pending_g.x + w->pending_g.width * 0.5;
@@ -581,6 +645,7 @@ void win_process_update_flags(session_t *ps, struct managed_win *w) {
 				w->animation_dest_w = w->pending_g.width;
 				w->animation_dest_h = w->pending_g.height;
 			}
+            w->dwm_mask = 0;
 
 			w->g.border_width = w->pending_g.border_width;
 
@@ -2446,6 +2511,30 @@ void unmap_win_start(session_t *ps, struct managed_win *w) {
 	w->opacity_target_old = fmax(w->opacity_target, w->opacity_target_old);
 	w->opacity_target = win_calc_opacity_target(ps, w);
 
+    if (ps->o.animations && ps->o.animation_for_unmap_window != OPEN_WINDOW_ANIMATION_NONE && ps->o.wintype_option[w->window_type].animation) {
+        w->dwm_mask = ANIM_UNMAP;
+        init_animation(ps, w);
+
+		double x_dist = w->animation_dest_center_x - w->animation_center_x;
+		double y_dist = w->animation_dest_center_y - w->animation_center_y;
+		double w_dist = w->animation_dest_w - w->animation_w;
+		double h_dist = w->animation_dest_h - w->animation_h;
+		w->animation_inv_og_distance =
+			1.0 / sqrt(x_dist * x_dist + y_dist * y_dist +
+						w_dist * w_dist + h_dist * h_dist);
+
+		if (isinf(w->animation_inv_og_distance))
+			w->animation_inv_og_distance = 0;
+
+		w->animation_progress = 0.0;
+
+		if (w->old_win_image) {
+			ps->backend_data->ops->release_image(ps->backend_data,
+												w->old_win_image);
+			w->old_win_image = NULL;
+		}
+    }
+
 #ifdef CONFIG_DBUS
 	// Send D-Bus signal
 	if (ps->o.dbus) {
@@ -2919,5 +3008,5 @@ win_stack_find_next_managed(const session_t *ps, const struct list_node *i) {
 /// Return whether this window is mapped on the X server side
 bool win_is_mapped_in_x(const struct managed_win *w) {
 	return w->state == WSTATE_MAPPING || w->state == WSTATE_FADING ||
-	       w->state == WSTATE_MAPPED || (w->flags & WIN_FLAGS_MAPPED);
+	       w->state == WSTATE_MAPPED || w->state == WSTATE_DESTROYING || (w->flags & WIN_FLAGS_MAPPED);
 }

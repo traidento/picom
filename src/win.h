@@ -98,6 +98,12 @@ struct win_geometry {
 	uint16_t border_width;
 };
 
+enum {
+    ANIM_PREV_TAG = 1,
+    ANIM_NEXT_TAG = (1 << 1),
+    ANIM_UNMAP = (1 << 2)
+};
+
 struct managed_win {
 	struct win base;
 	/// backend data attached to this window. Only available when
@@ -154,6 +160,8 @@ struct managed_win {
 	/// opacity state, window geometry, window mapped/unmapped state,
 	/// window mode of the windows above. DOES NOT INCLUDE the body of THIS WINDOW.
 	/// NULL means reg_ignore has not been calculated for this window.
+    /// 1 = tag prev  , 2 = tag next, 4 = unmap
+    uint32_t dwm_mask;
 	rc_region_t *reg_ignore;
 	/// Whether the reg_ignore of all windows beneath this window are valid
 	bool reg_ignore_valid;

@@ -550,10 +550,36 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 		}
 		opt->animation_for_transient_window = animation;
 	}
+	// --animation-for-unmap-window
+	if (config_lookup_string(&cfg, "animation-for-unmap-window", &sval)) {
+		enum open_window_animation animation = parse_open_window_animation(sval);
+		if (animation >= OPEN_WINDOW_ANIMATION_INVALID) {
+			log_fatal("Invalid unmap-window animation %s", sval);
+			goto err;
+		}
+		opt->animation_for_unmap_window = animation;
+	}
+	// --animation-for-next-tag
+	if (config_lookup_string(&cfg, "animation-for-next-tag", &sval)) {
+		enum open_window_animation animation = parse_open_window_animation(sval);
+		if (animation >= OPEN_WINDOW_ANIMATION_INVALID) {
+			log_fatal("Invalid next-tag animation %s", sval);
+			goto err;
+		}
+		opt->animation_for_next_tag = animation;
+	}
+	// --animation-for-prev-tag
+	if (config_lookup_string(&cfg, "animation-for-prev-tag", &sval)) {
+		enum open_window_animation animation = parse_open_window_animation(sval);
+		if (animation >= OPEN_WINDOW_ANIMATION_INVALID) {
+			log_fatal("Invalid prev-tag animation %s", sval);
+			goto err;
+		}
+		opt->animation_for_prev_tag = animation;
+	}
+
 	// --animation-stiffness
 	config_lookup_float(&cfg, "animation-stiffness", &opt->animation_stiffness);
-	// --animation-stiffness-curtag
-	config_lookup_float(&cfg, "animation-stiffness-curtag", &opt->animation_stiffness_curtag);
 	// --animation-window-mass
 	config_lookup_float(&cfg, "animation-window-mass", &opt->animation_window_mass);
 	// --animation-dampening

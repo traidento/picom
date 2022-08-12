@@ -526,7 +526,20 @@ enum open_window_animation parse_open_window_animation(const char *src) {
 		return OPEN_WINDOW_ANIMATION_SLIDE_LEFT;
 	} else if (strcmp(src, "slide-right") == 0) {
 		return OPEN_WINDOW_ANIMATION_SLIDE_RIGHT;
-	}
+	} else if (strcmp(src, "slide-out") == 0) {
+        return OPEN_WINDOW_ANIMATION_SLIDE_OUT;
+    } else if (strcmp(src, "slide-in") == 0) {
+        return OPEN_WINDOW_ANIMATION_SLIDE_IN;
+    } else if (strcmp(src, "slide-out-center") == 0) {
+        return OPEN_WINDOW_ANIMATION_SLIDE_OUT_CENTER;
+    } else if (strcmp(src, "slide-in-center") == 0) {
+        return OPEN_WINDOW_ANIMATION_SLIDE_IN_CENTER;
+    } else if (strcmp(src, "minimize") == 0) {
+        return OPEN_WINDOW_ANIMATION_MINIMIZE;
+    } else if (strcmp(src, "maximize") == 0) {
+        return OPEN_WINDOW_ANIMATION_MAXIMIZE;
+    }
+
 	return OPEN_WINDOW_ANIMATION_INVALID;
 }
 
@@ -576,6 +589,9 @@ char *parse_config(options_t *opt, const char *config_file, bool *shadow_enable,
 	    .animations = false,
 	    .animation_for_open_window = OPEN_WINDOW_ANIMATION_NONE,
 	    .animation_for_transient_window = OPEN_WINDOW_ANIMATION_NONE,
+        .animation_for_unmap_window = OPEN_WINDOW_ANIMATION_NONE,
+        .animation_for_next_tag = OPEN_WINDOW_ANIMATION_NONE,
+        .animation_for_prev_tag = OPEN_WINDOW_ANIMATION_NONE,
 	    .animation_stiffness = 200.0,
 	    .animation_stiffness_curtag = 100.0,
 	    .animation_window_mass = 1.0,

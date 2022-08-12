@@ -664,7 +664,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 				w->animation_dest_center_y - w->animation_center_y;
 			double neg_displacement_w = w->animation_dest_w - w->animation_w;
 			double neg_displacement_h = w->animation_dest_h - w->animation_h;
-            double animation_stiffness = w->pending_g.y < 0 ? ps->o.animation_stiffness_curtag : ps->o.animation_stiffness;
+            double animation_stiffness = ps->o.animation_stiffness;
 			double acceleration_x =
 				(animation_stiffness * neg_displacement_x -
 					ps->o.animation_dampening * w->animation_velocity_x) /
@@ -766,6 +766,14 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 			w->g.y = (int16_t)new_animation_y;
 			w->g.width = (uint16_t)new_animation_w;
 			w->g.height = (uint16_t)new_animation_h;
+
+            if ((w->g.width == 0 && w->g.height == 0)) {
+                w->g.width = w->pending_g.width;
+                w->g.height = w->pending_g.height;
+                w->g.x = w->pending_g.x;
+                w->g.y = w->pending_g.y;
+                size_changed = true;
+            }
 
 			// Submit window size change
 			if (size_changed) {
