@@ -101,7 +101,8 @@ struct win_geometry {
 enum {
     ANIM_PREV_TAG = 1,
     ANIM_NEXT_TAG = (1 << 1),
-    ANIM_UNMAP = (1 << 2)
+    ANIM_UNMAP = (1 << 2),
+    ANIM_SPECIAL_MINIMIZE = (1 << 3)
 };
 
 struct managed_win {
@@ -192,6 +193,8 @@ struct managed_win {
 	/// Inverse of the window distance at the start of animation, for
 	/// tracking animation progress
 	double animation_inv_og_distance;
+    /// Animation info if it is a tag change
+    bool animation_is_tag;
 
 	// Client window related members
 	/// ID of the top-level client window of the window.

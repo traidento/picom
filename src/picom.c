@@ -664,7 +664,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 				w->animation_dest_center_y - w->animation_center_y;
 			double neg_displacement_w = w->animation_dest_w - w->animation_w;
 			double neg_displacement_h = w->animation_dest_h - w->animation_h;
-            double animation_stiffness = ps->o.animation_stiffness;
+            double animation_stiffness = (w->animation_is_tag ? ps->o.animation_stiffness_for_tags : ps->o.animation_stiffness);
 			double acceleration_x =
 				(animation_stiffness * neg_displacement_x -
 					ps->o.animation_dampening * w->animation_velocity_x) /
@@ -674,11 +674,11 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 					ps->o.animation_dampening * w->animation_velocity_y) /
 				ps->o.animation_window_mass;
 			double acceleration_w =
-				(ps->o.animation_stiffness * neg_displacement_w -
+				(animation_stiffness * neg_displacement_w -
 					ps->o.animation_dampening * w->animation_velocity_w) /
 				ps->o.animation_window_mass;
 			double acceleration_h =
-				(ps->o.animation_stiffness * neg_displacement_h -
+				(animation_stiffness * neg_displacement_h -
 					ps->o.animation_dampening * w->animation_velocity_h) /
 				ps->o.animation_window_mass;
 			w->animation_velocity_x += acceleration_x * delta_secs;
@@ -767,12 +767,20 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 			w->g.width = (uint16_t)new_animation_w;
 			w->g.height = (uint16_t)new_animation_h;
 
-            if ((w->g.width == 0 && w->g.height == 0)) {
-                w->g.width = w->pending_g.width;
-                w->g.height = w->pending_g.height;
+            if (w->state != WSTATE_DESTROYING && w->state != WSTATE_UNMAPPING && w->state != WSTATE_UNMAPPED && (w->g.width == 0 || w->g.height == 0) && (w->animation_dest_w == 0 || w->animation_dest_h == 0)) {
                 w->g.x = w->pending_g.x;
                 w->g.y = w->pending_g.y;
-                size_changed = true;
+                if (ps->o.animation_for_next_tag != OPEN_WINDOW_ANIMATION_ZOOM &&
+                    ps->o.animation_for_next_tag != OPEN_WINDOW_ANIMATION_MAXIMIZE &&
+                    ps->o.animation_for_next_tag != OPEN_WINDOW_ANIMATION_SQUEEZE
+                    ) {
+                    w->g.width = w->pending_g.width;
+                    w->g.height = w->pending_g.height;
+                } else {
+                    w->g.width = 0;
+                    w->g.height = 0;
+                }
+                w->animation_progress = 1.0;
             }
 
 			// Submit window size change
@@ -801,6 +809,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 				w->animation_velocity_y = 0.0;
 				w->animation_velocity_w = 0.0;
 				w->animation_velocity_h = 0.0;
+                w->animation_is_tag = 0;
 			}
 
 			*animation_running = true;
@@ -1830,6 +1839,7 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ps->root_width = screen->width_in_pixels;
 	ps->root_height = screen->height_in_pixels;
 
+
 	// Start listening to events on root earlier to catch all possible
 	// root geometry changes
 	auto e = xcb_request_check(
@@ -2281,6 +2291,7 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 		free(query_tree_reply);
 	}
 
+
 	log_debug("Initial stack:");
 	list_foreach(struct win, w, &ps->window_stack, stack_neighbour) {
 		log_debug("%#010x", w->id);
@@ -2289,6 +2300,16 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ps->pending_updates = true;
 
 	write_pid(ps);
+
+    // When picom starts, fetch monitor positions first. Because it won't fetch the data unless property changes.
+    if (!ps->selmon_center_x && !ps->selmon_center_y) {
+        winprop_t prop = x_get_prop(ps->c, ps->root, ps->atoms->a_NET_CURRENT_MON_CENTER, 2L, XCB_ATOM_CARDINAL, 32);
+        if (prop.nitems == 2) {
+            ps->selmon_center_x = prop.p32[0];
+            ps->selmon_center_y = prop.p32[1];
+        }
+        free_winprop(&prop);
+    }
 
 	if (fork && stderr_logger) {
 		// Remove the stderr logger if we will fork

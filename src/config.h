@@ -51,6 +51,7 @@ enum open_window_animation {
 	OPEN_WINDOW_ANIMATION_SLIDE_OUT_CENTER,
 	OPEN_WINDOW_ANIMATION_MINIMIZE,
 	OPEN_WINDOW_ANIMATION_MAXIMIZE,
+	OPEN_WINDOW_ANIMATION_SQUEEZE,
 	OPEN_WINDOW_ANIMATION_INVALID,
 };
 
@@ -204,7 +205,7 @@ typedef struct options {
 	/// Spring stiffness for animation
 	double animation_stiffness;
 	/// Spring stiffness for current tag animation
-	double animation_stiffness_curtag;
+	double animation_stiffness_for_tags;
 	/// Window mass for animation
 	double animation_window_mass;
 	/// Animation dampening

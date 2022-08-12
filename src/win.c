@@ -453,11 +453,13 @@ static void init_animation(session_t *ps, struct managed_win *w) {
     anim_w = &w->animation_w, anim_h = &w->animation_h;
 	if (ps->o.wintype_option[w->window_type].animation < OPEN_WINDOW_ANIMATION_INVALID)
 		animation = ps->o.wintype_option[w->window_type].animation;
-    else if (w->dwm_mask & ANIM_PREV_TAG)
+    else if (w->dwm_mask & ANIM_PREV_TAG) {
         animation = ps->o.animation_for_prev_tag;
-    else if (w->dwm_mask & ANIM_NEXT_TAG)
+        w->animation_is_tag = true;
+    } else if (w->dwm_mask & ANIM_NEXT_TAG) {
         animation = ps->o.animation_for_next_tag;
-    else if (w->dwm_mask & ANIM_UNMAP) {
+        w->animation_is_tag = true;
+    } else if (w->dwm_mask & ANIM_UNMAP) {
         animation = ps->o.animation_for_unmap_window;
         anim_x = &w->animation_dest_center_x, anim_y = &w->animation_dest_center_y;
         anim_w = &w->animation_dest_w, anim_h = &w->animation_dest_h;
@@ -521,50 +523,57 @@ static void init_animation(session_t *ps, struct managed_win *w) {
 	}
     case OPEN_WINDOW_ANIMATION_SLIDE_IN: {
         w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5 - ps->root_height;
+		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5;
 		w->animation_w = w->pending_g.width;
 		w->animation_h = w->pending_g.height;
         break;
     }
     case OPEN_WINDOW_ANIMATION_SLIDE_IN_CENTER: {
-        if (w->xinerama_scr == -1) {
-            log_warn("EXTENTS ");
-            w->animation_center_x = (ps->screen_reg.extents.x2 + (ps->screen_reg.extents.x1 + ps->screen_reg.extents.x1)/2) ;
-        } else  {
-            auto e = pixman_region32_extents(&ps->xinerama_scr_regs[w->xinerama_scr]);
-            w->animation_center_x = (e->x2 + (e->x2 - e->x1) / 2);
-        }
-		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5 - ps->root_height;
+        w->animation_center_x = ps->selmon_center_x;
+		w->animation_center_y = w->g.y + w->pending_g.height * 0.5;
 		w->animation_w = w->pending_g.width;
 		w->animation_h = w->pending_g.height;
         break;
     }
     case OPEN_WINDOW_ANIMATION_SLIDE_OUT: {
         w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-		w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5 + ps->root_height;
+        w->animation_dest_center_y = w->pending_g.y;
 		w->animation_dest_w = w->pending_g.width;
 		w->animation_dest_h = w->pending_g.height;
         break;
     }
     case OPEN_WINDOW_ANIMATION_SLIDE_OUT_CENTER: {
-        if (w->xinerama_scr == -1) {
-            w->animation_dest_center_x = ((ps->screen_reg.extents.x2 + ps->screen_reg.extents.x1) / 2) - w->pending_g.width * 0.5;
-        } else  {
-            auto e = pixman_region32_extents(&ps->xinerama_scr_regs[w->xinerama_scr]);
-            w->animation_dest_center_x = ((e->x1 + e->x2) / 2) - w->pending_g.width * 0.5;
-        }
-        //w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-		w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5 - ps->root_height;
+        w->animation_dest_center_x = ps->selmon_center_x;
+		w->animation_dest_center_y = w->pending_g.y;
 		w->animation_dest_w = w->pending_g.width;
 		w->animation_dest_h = w->pending_g.height;
         break;
     }
     case OPEN_WINDOW_ANIMATION_MINIMIZE: {
-        w->animation_dest_center_x = (ps->root_width) / 2;
-        w->animation_dest_center_y = (ps->root_height) / 2;
+        w->animation_dest_center_x = ps->selmon_center_x;
+        w->animation_dest_center_y = ps->selmon_center_y;
 		w->animation_dest_w = 0;
 		w->animation_dest_h = 0;
-        w->dwm_mask = 16;
+        w->dwm_mask = ANIM_SPECIAL_MINIMIZE;
+        break;
+    }
+    case OPEN_WINDOW_ANIMATION_MAXIMIZE: {
+        w->animation_center_x = ps->selmon_center_x;
+        w->animation_center_y = ps->selmon_center_y;
+        w->animation_w = 0;
+        w->animation_h = 0;
+        break;
+    }
+    case OPEN_WINDOW_ANIMATION_SQUEEZE: {
+        if (w->dwm_mask & ANIM_PREV_TAG) {
+            w->dwm_mask = ANIM_SPECIAL_MINIMIZE;
+            w->animation_dest_h = 0;
+        } else {
+            *anim_x = w->pending_g.x + w->pending_g.width * 0.5;
+            *anim_y = w->pending_g.y + w->pending_g.height * 0.5;
+            *anim_w = w->pending_g.width;
+            *anim_h = 0;
+        }
         break;
     }
 	case OPEN_WINDOW_ANIMATION_INVALID: assert(false); break;
@@ -626,7 +635,7 @@ void win_process_update_flags(session_t *ps, struct managed_win *w) {
 				// Set window-open animation
 				init_animation(ps, w);
 
-                if (!(w->dwm_mask & 16)) {
+                if (!(w->dwm_mask & ANIM_SPECIAL_MINIMIZE)) {
                     w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
                     w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5;
                     w->animation_dest_w = w->pending_g.width;

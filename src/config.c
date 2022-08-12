@@ -538,6 +538,8 @@ enum open_window_animation parse_open_window_animation(const char *src) {
         return OPEN_WINDOW_ANIMATION_MINIMIZE;
     } else if (strcmp(src, "maximize") == 0) {
         return OPEN_WINDOW_ANIMATION_MAXIMIZE;
+    } else if (strcmp(src, "squeeze") == 0) {
+        return OPEN_WINDOW_ANIMATION_SQUEEZE;
     }
 
 	return OPEN_WINDOW_ANIMATION_INVALID;
@@ -593,7 +595,7 @@ char *parse_config(options_t *opt, const char *config_file, bool *shadow_enable,
         .animation_for_next_tag = OPEN_WINDOW_ANIMATION_NONE,
         .animation_for_prev_tag = OPEN_WINDOW_ANIMATION_NONE,
 	    .animation_stiffness = 200.0,
-	    .animation_stiffness_curtag = 100.0,
+	    .animation_stiffness_for_tags = 200.0,
 	    .animation_window_mass = 1.0,
 	    .animation_dampening = 25,
 	    .animation_clamping = true,
