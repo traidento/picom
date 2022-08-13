@@ -771,7 +771,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 			w->g.width = (uint16_t)new_animation_w;
 			w->g.height = (uint16_t)new_animation_h;
 
-            if (w->state != WSTATE_DESTROYING && w->state != WSTATE_UNMAPPING && w->state != WSTATE_UNMAPPED && (w->g.width == 0 || w->g.height == 0) && (w->animation_dest_w == 0 || w->animation_dest_h == 0)) {
+            if (w->animation_is_tag && w->state != WSTATE_DESTROYING && w->state != WSTATE_UNMAPPING && w->state != WSTATE_UNMAPPED && (w->g.width == 0 || w->g.height == 0) && (w->animation_dest_w == 0 || w->animation_dest_h == 0)) {
                 w->g.x = w->pending_g.x;
                 w->g.y = w->pending_g.y;
                 if (ps->o.animation_for_next_tag < OPEN_WINDOW_ANIMATION_ZOOM) {
