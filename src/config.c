@@ -540,6 +540,8 @@ enum open_window_animation parse_open_window_animation(const char *src) {
         return OPEN_WINDOW_ANIMATION_MAXIMIZE;
     } else if (strcmp(src, "squeeze") == 0) {
         return OPEN_WINDOW_ANIMATION_SQUEEZE;
+    } else if (strcmp(src, "squeeze-bottom") == 0) {
+        return OPEN_WINDOW_ANIMATION_SQUEEZE_BOTTOM;
     }
 
 	return OPEN_WINDOW_ANIMATION_INVALID;

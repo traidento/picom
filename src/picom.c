@@ -664,7 +664,11 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 				w->animation_dest_center_y - w->animation_center_y;
 			double neg_displacement_w = w->animation_dest_w - w->animation_w;
 			double neg_displacement_h = w->animation_dest_h - w->animation_h;
-            double animation_stiffness = (w->animation_is_tag ? ps->o.animation_stiffness_for_tags : ps->o.animation_stiffness);
+            double animation_stiffness = ps->o.animation_stiffness;
+            if (w->animation_is_tag == 1)
+                animation_stiffness = ps->o.animation_stiffness_for_tags;
+            else if (w->animation_is_tag == 2)
+                animation_stiffness = ps->o.animation_stiffness_for_tags * 1.7;
 			double acceleration_x =
 				(animation_stiffness * neg_displacement_x -
 					ps->o.animation_dampening * w->animation_velocity_x) /
@@ -770,10 +774,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
             if (w->state != WSTATE_DESTROYING && w->state != WSTATE_UNMAPPING && w->state != WSTATE_UNMAPPED && (w->g.width == 0 || w->g.height == 0) && (w->animation_dest_w == 0 || w->animation_dest_h == 0)) {
                 w->g.x = w->pending_g.x;
                 w->g.y = w->pending_g.y;
-                if (ps->o.animation_for_next_tag != OPEN_WINDOW_ANIMATION_ZOOM &&
-                    ps->o.animation_for_next_tag != OPEN_WINDOW_ANIMATION_MAXIMIZE &&
-                    ps->o.animation_for_next_tag != OPEN_WINDOW_ANIMATION_SQUEEZE
-                    ) {
+                if (ps->o.animation_for_next_tag < OPEN_WINDOW_ANIMATION_ZOOM) {
                     w->g.width = w->pending_g.width;
                     w->g.height = w->pending_g.height;
                 } else {

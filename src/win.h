@@ -193,8 +193,11 @@ struct managed_win {
 	/// Inverse of the window distance at the start of animation, for
 	/// tracking animation progress
 	double animation_inv_og_distance;
-    /// Animation info if it is a tag change
-    bool animation_is_tag;
+    /// Animation info if it is a tag change & check if its changing window sizes
+    /// 0: no tag change
+    /// 1: normal tag change animation
+    /// 2: tag change animation that effects window size
+    uint16_t animation_is_tag;
 
 	// Client window related members
 	/// ID of the top-level client window of the window.

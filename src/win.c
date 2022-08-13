@@ -455,10 +455,10 @@ static void init_animation(session_t *ps, struct managed_win *w) {
 		animation = ps->o.wintype_option[w->window_type].animation;
     else if (w->dwm_mask & ANIM_PREV_TAG) {
         animation = ps->o.animation_for_prev_tag;
-        w->animation_is_tag = true;
+        w->animation_is_tag = 1;
     } else if (w->dwm_mask & ANIM_NEXT_TAG) {
         animation = ps->o.animation_for_next_tag;
-        w->animation_is_tag = true;
+        w->animation_is_tag = 1;
     } else if (w->dwm_mask & ANIM_UNMAP) {
         animation = ps->o.animation_for_unmap_window;
         anim_x = &w->animation_dest_center_x, anim_y = &w->animation_dest_center_y;
@@ -555,6 +555,7 @@ static void init_animation(session_t *ps, struct managed_win *w) {
 		w->animation_dest_w = 0;
 		w->animation_dest_h = 0;
         w->dwm_mask = ANIM_SPECIAL_MINIMIZE;
+        w->animation_is_tag = 2;
         break;
     }
     case OPEN_WINDOW_ANIMATION_MAXIMIZE: {
@@ -562,6 +563,7 @@ static void init_animation(session_t *ps, struct managed_win *w) {
         w->animation_center_y = ps->selmon_center_y;
         w->animation_w = 0;
         w->animation_h = 0;
+        w->animation_is_tag = 2;
         break;
     }
     case OPEN_WINDOW_ANIMATION_SQUEEZE: {
@@ -574,8 +576,18 @@ static void init_animation(session_t *ps, struct managed_win *w) {
             *anim_w = w->pending_g.width;
             *anim_h = 0;
         }
+        w->animation_is_tag = 2;
         break;
     }
+    case OPEN_WINDOW_ANIMATION_SQUEEZE_BOTTOM: {
+        if (w->dwm_mask & ANIM_PREV_TAG) {
+            w->dwm_mask = ANIM_SPECIAL_MINIMIZE;
+            w->animation_dest_h = 0;
+            w->animation_dest_center_y = w->g.y + w->g.height;
+        }
+        w->animation_is_tag = 2;
+        break;
+   }
 	case OPEN_WINDOW_ANIMATION_INVALID: assert(false); break;
 	}
 }
