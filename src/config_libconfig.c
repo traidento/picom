@@ -579,9 +579,13 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 	}
 
 	// --animation-stiffness
-	config_lookup_float(&cfg, "animation-stiffness", &opt->animation_stiffness);
-	// --animation-stiffness-for-tags
-	config_lookup_float(&cfg, "animation-stiffness-for-tags", &opt->animation_stiffness_for_tags);
+	config_lookup_float(&cfg, "animation-stiffness-in-tag", &opt->animation_stiffness);
+	// --animation-stiffness-tag-change
+	config_lookup_float(&cfg, "animation-stiffness-tag-change", &opt->animation_stiffness_tag_change);
+	// --enable-fading-next-tag
+	lcfg_lookup_bool(&cfg, "enable-fading-next-tag", &opt->enable_fading_next_tag);
+	// --enable-fading-next-tag
+	lcfg_lookup_bool(&cfg, "enable-fading-prev-tag", &opt->enable_fading_prev_tag);
 	// --animation-window-mass
 	config_lookup_float(&cfg, "animation-window-mass", &opt->animation_window_mass);
 	// --animation-dampening

@@ -475,8 +475,8 @@ static const struct option longopts[] = {
     {"debug-mode", no_argument, NULL, 802},
     {"no-ewmh-fullscreen", no_argument, NULL, 803},
     {"animations", no_argument, NULL, 804},
-    {"animation-stiffness", required_argument, NULL, 805},
-    {"animation-stiffness-for-tags", required_argument, NULL, 806},
+    {"animation-stiffness-in-tag", required_argument, NULL, 805},
+    {"animation-stiffness-tag-change", required_argument, NULL, 806},
     {"animation-dampening", required_argument, NULL, 807},
     {"animation-window-mass", required_argument, NULL, 808},
     {"animation-clamping", no_argument, NULL, 809},
@@ -895,7 +895,7 @@ bool get_cfg(options_t *opt, int argc, char *const *argv, bool shadow_enable,
 			break;
 		case 806:
 			// --animation-stiffness-for-tags
-			opt->animation_stiffness_for_tags = atof(optarg);
+			opt->animation_stiffness_tag_change = atof(optarg);
 			break;
 		case 807:
 			// --animation-dampening

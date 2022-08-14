@@ -206,7 +206,7 @@ typedef struct options {
 	/// Spring stiffness for animation
 	double animation_stiffness;
 	/// Spring stiffness for current tag animation
-	double animation_stiffness_for_tags;
+	double animation_stiffness_tag_change;
 	/// Window mass for animation
 	double animation_window_mass;
 	/// Animation dampening
@@ -293,6 +293,12 @@ typedef struct options {
 	// Make transparent windows clip other windows, instead of blending on top of
 	// them
 	bool transparent_clipping;
+
+	// Enable fading for next tag
+	bool enable_fading_next_tag;
+
+	// Enable fading for prev tag
+	bool enable_fading_prev_tag;
 } options_t;
 
 extern const char *const BACKEND_STRS[NUM_BKEND + 1];
