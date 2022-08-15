@@ -99,13 +99,16 @@ struct win_geometry {
 };
 
 enum {
+    // dwm_mask
     ANIM_PREV_TAG = 1,
     ANIM_NEXT_TAG = (1 << 1),
     ANIM_UNMAP = (1 << 2),
     ANIM_SPECIAL_MINIMIZE = (1 << 3),
-    ANIM_SLOW = 1,
-    ANIM_FAST = (1 << 1),
-    ANIM_FADE = (1 << 2),
+    // animation_is_tag
+    ANIM_IN_TAG = 1,
+    ANIM_SLOW = (1 << 1),
+    ANIM_FAST = (1 << 2),
+    ANIM_FADE = (1 << 3),
 };
 
 struct managed_win {

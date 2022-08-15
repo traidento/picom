@@ -665,10 +665,12 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 			double neg_displacement_w = w->animation_dest_w - w->animation_w;
 			double neg_displacement_h = w->animation_dest_h - w->animation_h;
             double animation_stiffness = ps->o.animation_stiffness;
-            if (w->animation_is_tag & ANIM_SLOW)
-                animation_stiffness = ps->o.animation_stiffness_tag_change;
-            else if (w->animation_is_tag & ANIM_FAST)
-                animation_stiffness = ps->o.animation_stiffness_tag_change * 1.5;
+            if (!(w->animation_is_tag & ANIM_IN_TAG)) {
+                if (w->animation_is_tag & ANIM_SLOW)
+                    animation_stiffness = ps->o.animation_stiffness_tag_change;
+                else if (w->animation_is_tag & ANIM_FAST)
+                    animation_stiffness = ps->o.animation_stiffness_tag_change * 1.5;
+            }
             if (w->state == WSTATE_FADING && !(w->animation_is_tag & ANIM_FADE))
                 w->opacity_target = win_calc_opacity_target(ps, w);
 			double acceleration_x =
@@ -773,7 +775,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 			w->g.width = (uint16_t)new_animation_w;
 			w->g.height = (uint16_t)new_animation_h;
 
-            if (w->animation_is_tag && (w->g.width == 0 || w->g.height == 0) && (w->animation_dest_w == 0 || w->animation_dest_h == 0)) {
+            if (w->animation_is_tag > ANIM_IN_TAG && (((w->animation_is_tag & ANIM_FADE) && w->opacity_target == w->opacity)  || ((w->g.width == 0 || w->g.height == 0) && (w->animation_dest_w == 0 || w->animation_dest_h == 0)))) {
                 w->g.x = w->pending_g.x;
                 w->g.y = w->pending_g.y;
                 if (ps->o.animation_for_next_tag < OPEN_WINDOW_ANIMATION_ZOOM) {
@@ -812,9 +814,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 				w->animation_velocity_y = 0.0;
 				w->animation_velocity_w = 0.0;
 				w->animation_velocity_h = 0.0;
-                if (w->animation_is_tag & ANIM_FADE)
-                    w->opacity = 1.0;
-                w->animation_is_tag = 0;
+                w->opacity = win_calc_opacity_target(ps, w);
 			}
 
 			*animation_running = true;

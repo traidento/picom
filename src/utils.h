@@ -20,6 +20,7 @@
 #include "types.h"
 
 #define ARR_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
+#define CLEAR_MASK(x) x = 0;
 
 #ifdef __FAST_MATH__
 #warning Use of -ffast-math can cause rendering error or artifacts, \
