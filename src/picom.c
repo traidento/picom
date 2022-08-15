@@ -785,7 +785,6 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
                     w->g.width = 0;
                     w->g.height = 0;
                 }
-                w->animation_progress = 1.0;
             }
 
 			// Submit window size change
