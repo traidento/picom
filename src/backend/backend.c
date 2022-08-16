@@ -472,6 +472,8 @@ void paint_all_new(session_t *ps, struct managed_win *t, bool ignore_damage) {
 		} else {
 			if (is_animating && w->old_win_image) {
 				bool is_focused = win_is_focused_raw(ps, w);
+				if (!is_focused && w->focused && w->opacity_is_set)
+					is_focused = true;
 				assert(w->old_win_image);
 
 				bool resizing =
