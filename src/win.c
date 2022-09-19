@@ -643,12 +643,8 @@ void win_process_update_flags(session_t *ps, struct managed_win *w) {
 			add_damage_from_win(ps, w);
 		}
 
-		// Ignore animations all together if set to none on window type basis
-		if (ps->o.wintype_option[w->window_type].animation == 0) {
-			w->g = w->pending_g;
-
-		// Update window geometry
-		} else if (win_should_animate(ps, w)) {
+        // Determine if a window should animate
+		if (win_should_animate(ps, w)) {
             if (w->pending_g.y < 0 && w->g.y > 0 && abs(w->pending_g.y - w->g.y) >= w->pending_g.height)
                 w->dwm_mask = ANIM_PREV_TAG;
             else if (w->pending_g.y > 0 && w->g.y < 0 && abs(w->pending_g.y - w->g.y) >= w->pending_g.height)
