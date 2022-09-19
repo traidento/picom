@@ -648,7 +648,7 @@ void win_process_update_flags(session_t *ps, struct managed_win *w) {
 			w->g = w->pending_g;
 
 		// Update window geometry
-		} else if (ps->o.animations) {
+		} else if (win_should_animate(ps, w)) {
             if (w->pending_g.y < 0 && w->g.y > 0 && abs(w->pending_g.y - w->g.y) >= w->pending_g.height)
                 w->dwm_mask = ANIM_PREV_TAG;
             else if (w->pending_g.y > 0 && w->g.y < 0 && abs(w->pending_g.y - w->g.y) >= w->pending_g.height)
@@ -1090,6 +1090,24 @@ bool win_should_fade(session_t *ps, const struct managed_win *w) {
 		return false;
 	}
 	return ps->o.wintype_option[w->window_type].fade;
+}
+
+/**
+ * Determine if a window should animate.
+ */
+bool win_should_animate(session_t *ps, const struct managed_win *w) {
+    if (!ps->o.animations) {
+        return false;
+    }
+    if (ps->o.wintype_option[w->window_type].animation == 0) {
+        log_debug("Animation disabled by window_type");
+        return false;
+    }
+    if (c2_match(ps, w, ps->o.animation_blacklist, NULL)) {
+        log_debug("Animation disabled by animation_exclude");
+        return false;
+    }
+    return true;
 }
 
 /**

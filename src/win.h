@@ -484,6 +484,9 @@ bool win_check_flags_all(struct managed_win *w, uint64_t flags);
 /// Mark properties as stale for a window
 void win_set_properties_stale(struct managed_win *w, const xcb_atom_t *prop, int nprops);
 
+/// Determine if a window should animate
+bool attr_pure win_should_animate(session_t *ps, const struct managed_win *w);
+
 static inline attr_unused void win_set_property_stale(struct managed_win *w, xcb_atom_t prop) {
 	return win_set_properties_stale(w, (xcb_atom_t[]){prop}, 1);
 }

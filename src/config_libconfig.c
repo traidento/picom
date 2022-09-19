@@ -577,6 +577,8 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 		}
 		opt->animation_for_prev_tag = animation;
 	}
+	// --animations-exclude
+	parse_cfg_condlst(&cfg, &opt->animation_blacklist, "animation-exclude");
 
 	// --animation-stiffness
 	config_lookup_float(&cfg, "animation-stiffness-in-tag", &opt->animation_stiffness);

@@ -98,6 +98,9 @@ static void usage(const char *argv0, int ret) {
 	    "--animation-clamping\n"
 	    "  Whether to clamp animations (default: true)\n"
 	    "\n"
+	    "--animation-exclude condition\n"
+	    "  Exclude conditions for animation.\n"
+	    "\n"
 	    "-i opacity\n"
 	    "  Opacity of inactive windows. (0.1 - 1.0)\n"
 	    "\n"
@@ -927,6 +930,11 @@ bool get_cfg(options_t *opt, int argc, char *const *argv, bool shadow_enable,
 			} else {
 				opt->animation_for_transient_window = animation;
 			}
+			break;
+		}
+		case 812: {
+			// --animation-exclude
+			condlst_add(&opt->animation_blacklist, optarg);
 			break;
 		}
 		default: usage(argv[0], 1); break;
