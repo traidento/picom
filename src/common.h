@@ -190,8 +190,6 @@ typedef struct session {
 	int root_desktop_switch_direction;
 	// Damage of root window.
 	// Damage root_damage;
-    int selmon_center_x;
-    int selmon_center_y;
 	/// X Composite overlay window.
 	xcb_window_t overlay;
 	/// The target window for debug mode

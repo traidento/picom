@@ -47,13 +47,7 @@ enum open_window_animation {
 	OPEN_WINDOW_ANIMATION_SLIDE_RIGHT,
 	OPEN_WINDOW_ANIMATION_SLIDE_IN,
 	OPEN_WINDOW_ANIMATION_SLIDE_OUT,
-	OPEN_WINDOW_ANIMATION_SLIDE_IN_CENTER,
-	OPEN_WINDOW_ANIMATION_SLIDE_OUT_CENTER,
 	OPEN_WINDOW_ANIMATION_ZOOM,
-	OPEN_WINDOW_ANIMATION_MINIMIZE,
-	OPEN_WINDOW_ANIMATION_MAXIMIZE,
-	OPEN_WINDOW_ANIMATION_SQUEEZE,
-	OPEN_WINDOW_ANIMATION_SQUEEZE_BOTTOM,
 	OPEN_WINDOW_ANIMATION_INVALID,
 };
 
@@ -204,8 +198,6 @@ typedef struct options {
 	enum open_window_animation animation_for_open_window;
 	/// Which animation to run when opening a transient window
 	enum open_window_animation animation_for_transient_window;
-	/// Which animation to run when unmapping a window
-	enum open_window_animation animation_for_unmap_window;
 	/// Which animation to run when swapping to new tag
 	enum open_window_animation animation_for_next_tag;
 	/// Which animation to run for old tag

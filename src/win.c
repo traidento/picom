@@ -502,10 +502,17 @@ revert:
 		    sqrt(ps->root_width * ps->root_width + ps->root_height * ps->root_height);
 
 		// Set animation
-		*anim_x = ps->selmon_center_x + radius * cos(angle);
-		*anim_y = ps->selmon_center_y + radius * sin(angle);
-		*anim_w  = 0;
-		*anim_h = 0;
+		w->animation_center_x = ps->root_width * 0.5 + radius * cos(angle);
+		w->animation_center_y = ps->root_height * 0.5 + radius * sin(angle);
+		w->animation_w = 0;
+		w->animation_h = 0;
+		break;
+	}
+	case OPEN_WINDOW_ANIMATION_ZOOM: { // Zoom-in the image, without changing its location
+		w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
+		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5;
+		w->animation_w = 0;
+		w->animation_h = 0;
 		break;
 	}
 	case OPEN_WINDOW_ANIMATION_SLIDE_UP: { // Slide up the image, without changing its location
@@ -536,79 +543,6 @@ revert:
 		*anim_h = w->pending_g.height;
 		break;
 	}
-<<<<<<< HEAD
-    case OPEN_WINDOW_ANIMATION_SLIDE_IN: {
-        *anim_x = w->pending_g.x + w->pending_g.width * 0.5;
-		*anim_y = w->pending_g.y + w->pending_g.height * 0.5;
-		*anim_w = w->pending_g.width;
-		*anim_h = w->pending_g.height;
-        break;
-    }
-    case OPEN_WINDOW_ANIMATION_SLIDE_IN_CENTER: {
-        *anim_x = ps->selmon_center_x;
-		*anim_y = w->g.y + w->pending_g.height * 0.5;
-		*anim_w = w->pending_g.width;
-		*anim_h = w->pending_g.height;
-        break;
-    }
-    case OPEN_WINDOW_ANIMATION_SLIDE_OUT: {
-        w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-        w->animation_dest_center_y = w->pending_g.y;
-		w->animation_dest_w = w->pending_g.width;
-		w->animation_dest_h = w->pending_g.height;
-        break;
-    }
-    case OPEN_WINDOW_ANIMATION_SLIDE_OUT_CENTER: {
-        w->animation_dest_center_x = ps->selmon_center_x;
-		w->animation_dest_center_y = w->pending_g.y;
-		w->animation_dest_w = w->pending_g.width;
-		w->animation_dest_h = w->pending_g.height;
-        break;
-    }
-	case OPEN_WINDOW_ANIMATION_ZOOM: { // Zoom-in the image, without changing its location
-        if (w->dwm_mask & ANIM_SPECIAL_MINIMIZE) {
-            *anim_x = w->g.x + w->g.width * 0.5;
-            *anim_y = w->g.y + w->g.height * 0.5;
-        } else {
-            *anim_x = w->pending_g.x + w->pending_g.width * 0.5;
-            *anim_y = w->pending_g.y + w->pending_g.height * 0.5;
-        }
-		*anim_w = 0;
-		*anim_h = 0;
-		break;
-	}
-    case OPEN_WINDOW_ANIMATION_MINIMIZE: {
-        *anim_x = ps->selmon_center_x;
-        *anim_y = ps->selmon_center_y;
-		*anim_w = 0;
-		*anim_h = 0;
-        break;
-    }
-    case OPEN_WINDOW_ANIMATION_SQUEEZE: {
-        if (w->dwm_mask & ANIM_PREV_TAG) {
-            *anim_h = 0;
-        } else {
-            *anim_x = w->pending_g.x + w->pending_g.width * 0.5;
-            *anim_y = w->pending_g.y + w->pending_g.height * 0.5;
-            *anim_w = w->pending_g.width;
-            *anim_h = 0;
-        }
-        break;
-    }
-    case OPEN_WINDOW_ANIMATION_SQUEEZE_BOTTOM: {
-        if (w->dwm_mask & ANIM_PREV_TAG) {
-            *anim_y = w->g.y + w->g.height;
-            *anim_h = 0;
-        } else {
-            w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
-            w->animation_center_y = w->pending_g.y + w->pending_g.height;
-            w->animation_w = w->pending_g.width;
-            *anim_h = 0;
-            *anim_y = w->pending_g.y + w->pending_g.height;
-        }
-        break;
-   }
-=======
 	case OPEN_WINDOW_ANIMATION_SLIDE_IN: {
 		w->animation_center_x = w->pending_g.x + w->pending_g.width * 0.5;
 		w->animation_center_y = w->pending_g.y + w->pending_g.height * 0.5 -
@@ -620,7 +554,7 @@ revert:
 		w->animation_h = w->pending_g.height;
 		break;
 	}
-	case OPEN_WINDOW_ANIMATION_SLIDE_OUT: {
+ 	case OPEN_WINDOW_ANIMATION_SLIDE_OUT: {
 		w->animation_dest_center_x = w->pending_g.x + w->pending_g.width * 0.5;
 		w->animation_dest_center_y = w->pending_g.y + w->pending_g.height * 0.5 -
 			ps->root_height *
@@ -631,6 +565,7 @@ revert:
 		w->animation_dest_h = w->pending_g.height;
 		break;
 	}
+	
 	case OPEN_WINDOW_ANIMATION_INVALID: assert(false); break;
 	}
 }
@@ -753,7 +688,6 @@ static void init_animation_unmap(session_t *ps, struct managed_win *w) {
 		w->animation_dest_h = w->pending_g.height;
 		break;
 	}
->>>>>>> 0882542 (Add unmap and workspace switch animation)
 	case OPEN_WINDOW_ANIMATION_INVALID: assert(false); break;
 	}
 }
