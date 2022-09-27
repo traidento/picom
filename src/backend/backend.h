@@ -16,6 +16,8 @@
 typedef struct session session_t;
 struct managed_win;
 
+struct backend_shadow_context;
+
 struct ev_loop;
 struct backend_operations;
 
@@ -29,6 +31,15 @@ typedef struct backend_base {
 	bool busy;
 	// ...
 } backend_t;
+
+typedef struct geometry {
+	int width;
+	int height;
+} geometry_t;
+
+typedef struct coord {
+	int x, y;
+} coord_t;
 
 typedef void (*backend_ready_callback_t)(void *);
 
@@ -44,8 +55,8 @@ enum device_status {
 // When image properties are actually applied to the image, they are applied in a
 // particular order:
 //
-// Color inversion -> Dimming -> Opacity multiply -> Limit maximum brightness
-// (Corner radius could be applied in any order)
+// Corner radius -> Color inversion -> Dimming -> Opacity multiply -> Limit maximum
+// brightness
 enum image_properties {
 	// Whether the color of the image is inverted
 	// 1 boolean, default: false
@@ -70,11 +81,20 @@ enum image_properties {
 	// Border width
 	// 1 int, default: 0
 	IMAGE_PROPERTY_BORDER_WIDTH,
+	// Custom shader for this window.
+	// 1 pointer to shader struct, default: NULL
+	IMAGE_PROPERTY_CUSTOM_SHADER,
 };
 
 enum image_operations {
 	// Multiply the alpha channel by the argument
 	IMAGE_OP_APPLY_ALPHA,
+};
+
+enum shader_attributes {
+	// Whether the shader needs to be render regardless of whether the window is
+	// updated.
+	SHADER_ATTRIBUTE_ANIMATED = 1,
 };
 
 struct gaussian_blur_args {
@@ -149,26 +169,32 @@ struct backend_operations {
 	void (*prepare)(backend_t *backend_data, const region_t *reg_damage);
 
 	/**
-	 * Paint the content of an image onto the rendering buffer
+	 * Paint the content of an image onto the rendering buffer.
 	 *
-	 * @param backend_data   the backend data
-	 * @param image_data     the image to paint
-	 * @param dst_x1, dst_y1 the top left corner of the image in the target
-	 * @param dst_x2, dst_y2 the top right corner of the image in the target
-	 * @param reg_paint      the clip region, in target coordinates
-	 * @param reg_visible    the visible region, in target coordinates
+	 * @param backend_data the backend data
+	 * @param image_data   the image to paint
+	 * @param image_dst1 the top left corner of the image in the target
+	 * @param image_dst2 the top right corner of the image in the target
+	 * @param mask         the mask image, the top left of the mask is aligned with
+	 *                     the top left of the image
+	 * @param reg_paint    the clip region, in target coordinates
+	 * @param reg_visible  the visible region, in target coordinates
 	 */
 	void (*compose)(backend_t *backend_data, void *image_data,
-	                int dst_x1, int dst_y1, int dst_x2, int dst_y2,
+                    coord_t image_dst1, coord_t image_dst2,
+                    void *mask, coord_t mask_dst,
 	                const region_t *reg_paint, const region_t *reg_visible);
 
 	/// Fill rectangle of the rendering buffer, mostly for debug purposes, optional.
 	void (*fill)(backend_t *backend_data, struct color, const region_t *clip);
 
 	/// Blur a given region of the rendering buffer.
-	bool (*blur)(backend_t *backend_data, double opacity, void *blur_ctx,
-	             const region_t *reg_blur, const region_t *reg_visible)
-	    attr_nonnull(1, 3, 4, 5);
+	///
+	/// The blur is limited by `mask`. `mask_dst` specifies the top left corner of the
+	/// mask is.
+	bool (*blur)(backend_t *backend_data, double opacity, void *blur_ctx, void *mask,
+	             coord_t mask_dst, const region_t *reg_blur,
+	             const region_t *reg_visible) attr_nonnull(1, 3, 4, 6, 7);
 
 	/// Update part of the back buffer with the rendering buffer, then present the
 	/// back buffer onto the target window (if not back buffered, update part of the
@@ -191,17 +217,66 @@ struct backend_operations {
 	void *(*bind_pixmap)(backend_t *backend_data, xcb_pixmap_t pixmap,
 	                     struct xvisual_info fmt, bool owned);
 
-	/// Create a shadow image based on the parameters
+	/// Create a shadow context for rendering shadows with radius `radius`.
+	/// Default implementation: default_backend_create_shadow_context
+	struct backend_shadow_context *(*create_shadow_context)(backend_t *backend_data,
+	                                                        double radius);
+	/// Destroy a shadow context
+	/// Default implementation: default_backend_destroy_shadow_context
+	void (*destroy_shadow_context)(backend_t *backend_data,
+	                               struct backend_shadow_context *ctx);
+
+	/// Create a shadow image based on the parameters. Resulting image should have a
+	/// size of `width + radisu * 2` x `height + radius * 2`. Radius is set when the
+	/// shadow context is created.
 	/// Default implementation: default_backend_render_shadow
+	///
+	/// Required.
 	void *(*render_shadow)(backend_t *backend_data, int width, int height,
-	                       const conv *kernel, double r, double g, double b, double a);
+	                       struct backend_shadow_context *ctx, struct color color);
+
+	/// Create a shadow by blurring a mask. `size` is the size of the blur. The
+	/// backend can use whichever blur method is the fastest. The shadow produced
+	/// shoule be consistent with `render_shadow`.
+	///
+	/// Optional.
+	void *(*shadow_from_mask)(backend_t *backend_data, void *mask,
+	                          struct backend_shadow_context *ctx, struct color color);
+
+	/// Create a mask image from region `reg`. This region can be used to create
+	/// shadow, or used as a mask for composing. When used as a mask, it should mask
+	/// out everything that is not inside the region used to create it.
+	///
+	/// Image properties might be set on masks too, at least the INVERTED and
+	/// CORNER_RADIUS properties must be supported. Inversion should invert the inside
+	/// and outside of the mask. Corner radius should exclude the corners from the
+	/// mask. Corner radius should be applied before the inversion.
+	///
+	/// Required.
+	void *(*make_mask)(backend_t *backend_data, geometry_t size, const region_t *reg);
 
 	// ============ Resource management ===========
 
 	/// Free resources associated with an image data structure
 	void (*release_image)(backend_t *backend_data, void *img_data) attr_nonnull(1, 2);
 
+	/// Create a shader object from a shader source.
+	///
+	/// Optional
+	void *(*create_shader)(backend_t *backend_data, const char *source)attr_nonnull(1, 2);
+
+	/// Free a shader object.
+	///
+	/// Required if create_shader is present.
+	void (*destroy_shader)(backend_t *backend_data, void *shader) attr_nonnull(1, 2);
+
 	// ===========        Query         ===========
+
+	/// Get the attributes of a shader.
+	///
+	/// Optional, Returns a bitmask of attributes, see `shader_attributes`.
+	uint64_t (*get_shader_attributes)(backend_t *backend_data, void *shader)
+	    attr_nonnull(1, 2);
 
 	/// Return if image is not completely opaque.
 	///

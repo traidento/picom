@@ -170,20 +170,71 @@ make_rounded_corner_cache(xcb_connection_t *c, xcb_render_picture_t src,
 	return ret;
 }
 
-static void compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg,
-                         int dst_x1, int dst_y1, int dst_x2, int dst_y2,
-			 const region_t *reg_paint, const region_t *reg_visible,
-			 xcb_render_picture_t result) {
+static xcb_render_picture_t process_mask(struct _xrender_data *xd, struct xrender_image *mask,
+                                         xcb_render_picture_t alpha_pict, bool *allocated) {
+	auto inner = (struct _xrender_image_data_inner *)mask->base.inner;
+	if (!mask->base.color_inverted && mask->base.corner_radius == 0) {
+		*allocated = false;
+		return inner->pict;
+	}
+	const auto tmpw = to_u16_checked(inner->width);
+	const auto tmph = to_u16_checked(inner->height);
+	*allocated = true;
+	x_clear_picture_clip_region(xd->base.c, inner->pict);
+	auto ret = x_create_picture_with_visual(
+	    xd->base.c, xd->base.root, inner->width, inner->height, inner->visual,
+	    XCB_RENDER_CP_REPEAT,
+	    (xcb_render_create_picture_value_list_t[]){XCB_RENDER_REPEAT_PAD});
+	xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_SRC, inner->pict, XCB_NONE,
+	                     ret, 0, 0, 0, 0, 0, 0, tmpw, tmph);
+	// Remember: the mask has a 1-pixel border
+	if (mask->base.corner_radius != 0) {
+		if (mask->rounded_rectangle == NULL) {
+			mask->rounded_rectangle = make_rounded_corner_cache(
+			    xd->base.c, xd->white_pixel, xd->base.root, inner->width - 2,
+			    inner->height - 2, (int)mask->base.corner_radius);
+		}
+		xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_IN_REVERSE,
+		                     mask->rounded_rectangle->p, XCB_NONE, ret, 0, 0, 0,
+		                     0, 1, 1, (uint16_t)(tmpw - 2), (uint16_t)(tmph - 2));
+	}
+
+	if (mask->base.color_inverted) {
+		xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_XOR, xd->white_pixel,
+		                     XCB_NONE, ret, 0, 0, 0, 0, 0, 0, tmpw, tmph);
+	}
+
+	if (alpha_pict != XCB_NONE) {
+		xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_SRC, ret, alpha_pict,
+		                     ret, 0, 0, 0, 0, 0, 0, to_u16_checked(inner->width),
+		                     to_u16_checked(inner->height));
+	}
+
+	return ret;
+}
+
+static void
+compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg, coord_t dst, coord_t dst2,
+             struct xrender_image *mask, coord_t mask_dst, const region_t *reg_paint,
+             const region_t *reg_visible, xcb_render_picture_t result) {
 	const struct backend_image *img = &xrimg->base;
-	auto alpha_pict = xd->alpha_pict[(int)(img->opacity * MAX_ALPHA)];
+	bool mask_allocated = false;
+	auto mask_pict = xd->alpha_pict[(int)(img->opacity * MAX_ALPHA)];
+	if (mask != NULL) {
+		mask_pict = process_mask(
+		    xd, mask, img->opacity < 1.0 ? mask_pict : XCB_NONE, &mask_allocated);
+	}
 	auto inner = (struct _xrender_image_data_inner *)img->inner;
 	region_t reg;
 
 	bool has_alpha = inner->has_alpha || img->opacity != 1;
-	const auto tmpw = to_u16_checked(dst_x2 - dst_x1);
-	const auto tmph = to_u16_checked(dst_y2 - dst_y1);
-	const auto tmpew = to_u16_checked(dst_x2 - dst_x1);
-	const auto tmpeh = to_u16_checked(dst_y2 - dst_y1);
+	const auto tmpw = to_u16_checked(inner->width);
+	const auto tmph = to_u16_checked(inner->height);
+	const auto tmpew = to_u16_checked(img->ewidth);
+	const auto tmpeh = to_u16_checked(img->eheight);
+	// Remember: the mask has a 1-pixel border
+	const auto mask_dst_x = to_i16_checked(dst.x - mask_dst.x + 1);
+	const auto mask_dst_y = to_i16_checked(dst.y - mask_dst.y + 1);
 	const xcb_render_color_t dim_color = {
 	    .red = 0, .green = 0, .blue = 0, .alpha = (uint16_t)(0xffff * img->dim)};
 
@@ -220,11 +271,19 @@ static void compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg,
 		                                 inner->height, inner->visual, 0, NULL);
 
 		// Set clip region translated to source coordinate
-		x_set_picture_clip_region(xd->base.c, tmp_pict, to_i16_checked(-dst_x1),
-		                          to_i16_checked(-dst_y1), &reg);
+		x_set_picture_clip_region(xd->base.c, tmp_pict, to_i16_checked(-dst.x),
+		                          to_i16_checked(-dst.y), &reg);
 		// Copy source -> tmp
 		xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_OVER, inner->pict,
 		                     XCB_NONE, tmp_pict, 0, 0, 0, 0, 0, 0, tmpw, tmph);
+
+		if (img->corner_radius != 0 && xrimg->rounded_rectangle != NULL) {
+			// Clip tmp_pict with a rounded rectangle
+			xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_IN_REVERSE,
+			                     xrimg->rounded_rectangle->p, XCB_NONE,
+			                     tmp_pict, 0, 0, 0, 0, 0, 0, tmpw, tmph);
+		}
+
 		if (img->color_inverted) {
 			if (inner->has_alpha) {
 				auto tmp_pict2 = x_create_picture_with_visual(
@@ -260,38 +319,32 @@ static void compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg,
 			                           tmp_pict, dim_color, 1, &rect);
 		}
 
-		if (img->corner_radius != 0 && xrimg->rounded_rectangle != NULL) {
-			// Clip tmp_pict with a rounded rectangle
-			xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_IN_REVERSE,
-			                     xrimg->rounded_rectangle->p, XCB_NONE,
-			                     tmp_pict, 0, 0, 0, 0, 0, 0, tmpw, tmph);
-		}
-
 		xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_OVER, tmp_pict,
-		                     alpha_pict, result, 0, 0, 0, 0, to_i16_checked(dst_x1),
-		                     to_i16_checked(dst_y1), tmpew, tmpeh);
+		                     mask_pict, result, 0, 0, mask_dst_x, mask_dst_y,
+		                     to_i16_checked(dst.x), to_i16_checked(dst.y), tmpew,
+		                     tmpeh);
 		xcb_render_free_picture(xd->base.c, tmp_pict);
 	} else {
 		uint8_t op = (has_alpha ? XCB_RENDER_PICT_OP_OVER : XCB_RENDER_PICT_OP_SRC);
 
-		xcb_render_composite(xd->base.c, op, inner->pict, alpha_pict, result, 0,
-		                     0, 0, 0, to_i16_checked(dst_x1),
-		                     to_i16_checked(dst_y1), tmpew, tmpeh);
+		xcb_render_composite(xd->base.c, op, inner->pict, mask_pict, result, 0, 0,
+		                     mask_dst_x, mask_dst_y, to_i16_checked(dst.x),
+		                     to_i16_checked(dst.y), tmpew, tmpeh);
 		if (img->dim != 0 || img->color_inverted) {
 			// Apply properties, if we reach here, then has_alpha == false
 			assert(!has_alpha);
 			if (img->color_inverted) {
 				xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_DIFFERENCE,
 				                     xd->white_pixel, XCB_NONE, result, 0,
-				                     0, 0, 0, to_i16_checked(dst_x1),
-				                     to_i16_checked(dst_y1), tmpew, tmpeh);
+				                     0, 0, 0, to_i16_checked(dst.x),
+				                     to_i16_checked(dst.y), tmpew, tmpeh);
 			}
 
 			if (img->dim != 0) {
 				// Dim the actually content of window
 				xcb_rectangle_t rect = {
-				    .x = to_i16_checked(dst_x1),
-				    .y = to_i16_checked(dst_y1),
+				    .x = to_i16_checked(dst.x),
+				    .y = to_i16_checked(dst.y),
 				    .width = tmpew,
 				    .height = tmpeh,
 				};
@@ -301,15 +354,18 @@ static void compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg,
 			}
 		}
 	}
+	if (mask_allocated) {
+		xcb_render_free_picture(xd->base.c, mask_pict);
+	}
 	pixman_region32_fini(&reg);
 }
 
-static void compose(backend_t *base, void *img_data,
-		    int dst_x1, int dst_y1, int dst_x2, int dst_y2,
+static void compose(backend_t *base, void *img_data, coord_t dst, coord_t dst2, void *mask, coord_t mask_dst,
                     const region_t *reg_paint, const region_t *reg_visible) {
 	// TODO(dccsillag): use dst_{x,y}2
 	struct _xrender_data *xd = (void *)base;
-	return compose_impl(xd, img_data, dst_x1, dst_y1, dst_x2, dst_y2, reg_paint, reg_visible, xd->back[2]);
+	return compose_impl(xd, img_data, dst, dst2, mask, mask_dst, reg_paint, reg_visible,
+	                    xd->back[2]);
 }
 
 static void fill(backend_t *base, struct color c, const region_t *clip) {
@@ -330,8 +386,8 @@ static void fill(backend_t *base, struct color c, const region_t *clip) {
 	                         .height = to_u16_checked(extent->y2 - extent->y1)}});
 }
 
-static bool blur(backend_t *backend_data, double opacity, void *ctx_,
-                 const region_t *reg_blur, const region_t *reg_visible) {
+static bool blur(backend_t *backend_data, double opacity, void *ctx_, void *mask,
+                 coord_t mask_dst, const region_t *reg_blur, const region_t *reg_visible) {
 	struct _xrender_blur_context *bctx = ctx_;
 	if (bctx->method == BLUR_METHOD_NONE) {
 		return true;
@@ -382,7 +438,12 @@ static bool blur(backend_t *backend_data, double opacity, void *ctx_,
 	pixman_region32_fini(&clip);
 
 	xcb_render_picture_t src_pict = xd->back[2], dst_pict = tmp_picture[0];
-	auto alpha_pict = xd->alpha_pict[(int)(opacity * MAX_ALPHA)];
+	auto mask_pict = xd->alpha_pict[(int)(opacity * MAX_ALPHA)];
+	bool mask_allocated = false;
+	if (mask != NULL) {
+		mask_pict = process_mask(xd, mask, opacity != 1.0 ? mask_pict : XCB_NONE,
+		                         &mask_allocated);
+	}
 	int current = 0;
 	x_set_picture_clip_region(c, src_pict, 0, 0, &reg_op_resized);
 
@@ -418,11 +479,12 @@ static bool blur(backend_t *backend_data, double opacity, void *ctx_,
 		} else {
 			x_set_picture_clip_region(c, xd->back[2], 0, 0, &reg_op);
 			// This is the last pass, and we are doing more than 1 pass
-			xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER, src_pict,
-			                     alpha_pict, xd->back[2], 0, 0, 0, 0,
-			                     to_i16_checked(extent_resized->x1),
-			                     to_i16_checked(extent_resized->y1),
-			                     width_resized, height_resized);
+			xcb_render_composite(
+			    c, XCB_RENDER_PICT_OP_OVER, src_pict, mask_pict, xd->back[2],
+			    0, 0, to_i16_checked(extent_resized->x1 - mask_dst.x + 1),
+			    to_i16_checked(extent_resized->y1 - mask_dst.y + 1),
+			    to_i16_checked(extent_resized->x1),
+			    to_i16_checked(extent_resized->y1), width_resized, height_resized);
 		}
 
 		// reset filter
@@ -438,8 +500,10 @@ static bool blur(backend_t *backend_data, double opacity, void *ctx_,
 	if (i == 1) {
 		x_set_picture_clip_region(c, xd->back[2], 0, 0, &reg_op);
 		xcb_render_composite(
-		    c, XCB_RENDER_PICT_OP_OVER, src_pict, alpha_pict, xd->back[2], 0, 0,
-		    0, 0, to_i16_checked(extent_resized->x1),
+		    c, XCB_RENDER_PICT_OP_OVER, src_pict, mask_pict, xd->back[2], 0, 0,
+		    to_i16_checked(extent_resized->x1 - mask_dst.x + 1),
+		    to_i16_checked(extent_resized->y1 - mask_dst.y + 1),
+		    to_i16_checked(extent_resized->x1),
 		    to_i16_checked(extent_resized->y1), width_resized, height_resized);
 	}
 
@@ -633,6 +697,52 @@ new_inner(backend_t *base, int w, int h, xcb_visualid_t visual, uint8_t depth) {
 	new_inner->refcount = 1;
 	new_inner->owned = true;
 	return new_inner;
+}
+
+static void *make_mask(backend_t *base, geometry_t size, const region_t *reg) {
+	struct _xrender_data *xd = (void *)base;
+	// Give the mask a 1 pixel wide border to emulate the clamp to border behavior of
+	// OpenGL textures.
+	auto w16 = to_u16_checked(size.width + 2);
+	auto h16 = to_u16_checked(size.height + 2);
+	auto inner =
+	    new_inner(base, size.width + 2, size.height + 2,
+	              x_get_visual_for_standard(base->c, XCB_PICT_STANDARD_ARGB_32), 32);
+	xcb_render_change_picture(base->c, inner->pict, XCB_RENDER_CP_REPEAT,
+	                          (uint32_t[]){XCB_RENDER_REPEAT_PAD});
+	const rect_t *extent = pixman_region32_extents((region_t *)reg);
+	x_set_picture_clip_region(base->c, xd->back[2], 1, 1, reg);
+	xcb_render_fill_rectangles(
+	    base->c, XCB_RENDER_PICT_OP_SRC, inner->pict,
+	    (xcb_render_color_t){.red = 0, .green = 0, .blue = 0, .alpha = 0xffff}, 1,
+	    (xcb_rectangle_t[]){{.x = to_i16_checked(extent->x1 + 1),
+	                         .y = to_i16_checked(extent->y1 + 1),
+	                         .width = to_u16_checked(extent->x2 - extent->x1),
+	                         .height = to_u16_checked(extent->y2 - extent->y1)}});
+	x_clear_picture_clip_region(xd->base.c, inner->pict);
+
+	// Paint the border transparent
+	xcb_render_fill_rectangles(
+	    base->c, XCB_RENDER_PICT_OP_SRC, inner->pict,
+	    (xcb_render_color_t){.red = 0, .green = 0, .blue = 0, .alpha = 0}, 4,
+	    (xcb_rectangle_t[]){{.x = 0, .y = 0, .width = w16, .height = 1},
+	                        {.x = 0, .y = 0, .width = 1, .height = h16},
+	                        {.x = 0, .y = (short)(h16 - 1), .width = w16, .height = 1},
+	                        {.x = (short)(w16 - 1), .y = 0, .width = 1, .height = h16}});
+	inner->refcount = 1;
+
+	auto img = ccalloc(1, struct xrender_image);
+	img->base.eheight = size.height + 2;
+	img->base.ewidth = size.width + 2;
+	img->base.border_width = 0;
+	img->base.color_inverted = false;
+	img->base.corner_radius = 0;
+	img->base.max_brightness = 1;
+	img->base.opacity = 1;
+	img->base.dim = 0;
+	img->base.inner = (struct backend_image_inner_base *)inner;
+	img->rounded_rectangle = NULL;
+	return img;
 }
 
 static bool decouple_image(backend_t *base, struct backend_image *img, const region_t *reg) {
@@ -871,7 +981,10 @@ struct backend_operations xrender_ops = {
     .fill = fill,
     .bind_pixmap = bind_pixmap,
     .release_image = release_image,
+    .create_shadow_context = default_create_shadow_context,
+    .destroy_shadow_context = default_destroy_shadow_context,
     .render_shadow = default_backend_render_shadow,
+    .make_mask = make_mask,
     //.prepare_win = prepare_win,
     //.release_win = release_win,
     .is_image_transparent = default_is_image_transparent,
