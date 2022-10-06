@@ -7,20 +7,6 @@ __picom__ is a compositor for X, and a [fork of Compton](History.md).
 
 You can leave your feedback or thoughts in the [discussion tab](https://github.com/yshui/picom/discussions).
 
-## Call for testers
-
-### `--experimental-backends`
-
-This flag enables the refactored/partially rewritten backends.
-
-Currently, new backends feature better vsync with the xrender backend and improved input lag with the glx backend (for non-NVIDIA users). The performance should be on par with the old backends.
-
-New backend features will only be implemented on the new backends from now on, and the old backends will eventually be phased out after the new backends stabilize.
-
-To test the new backends, add the `--experimental-backends` flag to the command you use to run picom. This flag is not available from the configuration file.
-
-To report issues with the new backends, please state explicitly you are using the new backends in your report.
-
 ## Change Log
 
 See [Releases](https://github.com/yshui/picom/releases)
@@ -50,7 +36,7 @@ Assuming you already have all the usual building tools installed (e.g. gcc, pyth
 * pixman
 * libdbus (optional, disable with the `-Ddbus=false` meson configure flag)
 * libconfig (optional, disable with the `-Dconfig_file=false` meson configure flag)
-* libGL (optional, disable with the `-Dopengl=false` meson configure flag)
+* libGL, libEGL (optional, disable with the `-Dopengl=false` meson configure flag)
 * libpcre (optional, disable with the `-Dregex=false` meson configure flag)
 * libev
 * uthash
@@ -58,13 +44,13 @@ Assuming you already have all the usual building tools installed (e.g. gcc, pyth
 On Debian based distributions (e.g. Ubuntu), the needed packages are
 
 ```
-libxext-dev libxcb1-dev libxcb-damage0-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-render-util0-dev libxcb-render0-dev libxcb-randr0-dev libxcb-composite0-dev libxcb-image0-dev libxcb-present-dev libxcb-xinerama0-dev libxcb-glx0-dev libpixman-1-dev libdbus-1-dev libconfig-dev libgl1-mesa-dev libpcre2-dev libpcre3-dev libevdev-dev uthash-dev libev-dev libx11-xcb-dev meson
+libxext-dev libxcb1-dev libxcb-damage0-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-render-util0-dev libxcb-render0-dev libxcb-randr0-dev libxcb-composite0-dev libxcb-image0-dev libxcb-present-dev libxcb-xinerama0-dev libxcb-glx0-dev libpixman-1-dev libdbus-1-dev libconfig-dev libgl-dev libegl-dev libpcre2-dev libpcre3-dev libevdev-dev uthash-dev libev-dev libx11-xcb-dev meson
 ```
 
 On Fedora, the needed packages are
 
 ```
-dbus-devel gcc git libconfig-devel libdrm-devel libev-devel libX11-devel libX11-xcb libXext-devel libxcb-devel mesa-libGL-devel meson pcre-devel pixman-devel uthash-devel xcb-util-image-devel xcb-util-renderutil-devel xorg-x11-proto-devel
+dbus-devel gcc git libconfig-devel libdrm-devel libev-devel libX11-devel libX11-xcb libXext-devel libxcb-devel libGL-devel libEGL-devel meson pcre-devel pixman-devel uthash-devel xcb-util-image-devel xcb-util-renderutil-devel xorg-x11-proto-devel
 ```
 
 To build the documents, you need `asciidoc`
