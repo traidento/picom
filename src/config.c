@@ -734,7 +734,7 @@ void set_default_winopts(options_t *opt, win_option_mask_t *mask, bool shadow_en
 enum open_window_animation parse_open_window_animation(const char *src) {
 	if (strcmp(src, "none") == 0) {
 		return OPEN_WINDOW_ANIMATION_NONE;
-	}else if (strcmp(src, "auto") == 0) {
+	} else if (strcmp(src, "auto") == 0) {
 		return OPEN_WINDOW_ANIMATION_AUTO;
 	} else if (strcmp(src, "fly-in") == 0) {
 		return OPEN_WINDOW_ANIMATION_FLYIN;
@@ -748,6 +748,10 @@ enum open_window_animation parse_open_window_animation(const char *src) {
 		return OPEN_WINDOW_ANIMATION_SLIDE_LEFT;
 	} else if (strcmp(src, "slide-right") == 0) {
 		return OPEN_WINDOW_ANIMATION_SLIDE_RIGHT;
+	} else if (strcmp(src, "slide-in") == 0) {
+		return OPEN_WINDOW_ANIMATION_SLIDE_IN;
+	} else if (strcmp(src, "slide-out") == 0) {
+		return OPEN_WINDOW_ANIMATION_SLIDE_OUT;
 	}
 	return OPEN_WINDOW_ANIMATION_INVALID;
 }
