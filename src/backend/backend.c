@@ -98,9 +98,8 @@ static void process_window_for_painting(session_t *ps, struct managed_win *w,
 	                                (double[]){w->frame_opacity});
 	pixman_region32_fini(&reg_frame);
 	ps->backend_data->ops->compose(ps->backend_data, new_img, (coord_t){.x = w->g.x, .y = w->g.y},
-				(coord_t){.x = w->g.x + w->widthb, .y = w->g.y + w->heightb},
 				NULL, (coord_t){0},
-	                        reg_paint_in_bound, reg_visible);
+				reg_paint_in_bound, reg_visible);
 	ps->backend_data->ops->release_image(ps->backend_data, new_img);
 	pixman_region32_fini(&reg_visible_local);
 }
@@ -234,9 +233,8 @@ void paint_all_new(session_t *ps, struct managed_win *t, bool ignore_damage) {
 	}
 
 	if (ps->root_image) {
-        coord_t root_coord = {.x = ps->root_width, .y = ps->root_height};
 		ps->backend_data->ops->compose(ps->backend_data, ps->root_image,
-		                               (coord_t){0}, root_coord, NULL, (coord_t){0},
+		                               (coord_t){0}, NULL, (coord_t){0},
 		                               &reg_paint, &reg_visible);
 	} else {
 		ps->backend_data->ops->fill(ps->backend_data, (struct color){0, 0, 0, 1},
@@ -402,8 +400,6 @@ void paint_all_new(session_t *ps, struct managed_win *t, bool ignore_damage) {
 			    &w->opacity);
 			coord_t shadow_coord = {.x = w->g.x + w->shadow_dx,
 			                        .y = w->g.y + w->shadow_dy};
-            coord_t shadow_coord2 = {.x = w->g.x + w->shadow_dx + w->shadow_width,
-			                         .y = w->g.y + w->shadow_dy + w->shadow_height};
 
 			auto inverted_mask = NULL;
 			if (!ps->o.wintype_option[w->window_type].full_shadow) {
@@ -417,7 +413,7 @@ void paint_all_new(session_t *ps, struct managed_win *t, bool ignore_damage) {
 				}
 			}
 			ps->backend_data->ops->compose(
-			    ps->backend_data, w->shadow_image, shadow_coord, shadow_coord2,
+			    ps->backend_data, w->shadow_image, shadow_coord,
 			    inverted_mask, window_coord, &reg_shadow, &reg_visible);
 			if (inverted_mask) {
 				ps->backend_data->ops->set_image_property(
@@ -497,10 +493,8 @@ void paint_all_new(session_t *ps, struct managed_win *t, bool ignore_damage) {
 		// Draw window on target
 		bool is_animating = 0 <= w->animation_progress && w->animation_progress < 1.0;
 		if (w->frame_opacity == 1 && !is_animating) {
-			coord_t window_coordb = {.x = w->g.x + w->widthb, .y = w->g.y + w->heightb};
 			ps->backend_data->ops->compose(ps->backend_data, w->win_image,
-			                               window_coord, window_coordb,
-                                           NULL, window_coord,
+			                               window_coord, NULL, window_coord,
 			                               &reg_paint_in_bound, &reg_visible);
 		} else {
 			if (is_animating && w->old_win_image) {
