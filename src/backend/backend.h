@@ -173,17 +173,15 @@ struct backend_operations {
 	 *
 	 * @param backend_data the backend data
 	 * @param image_data   the image to paint
-	 * @param image_dst1 the top left corner of the image in the target
-	 * @param image_dst2 the top right corner of the image in the target
+	 * @param image_dst the top left corner of the image in the target
 	 * @param mask         the mask image, the top left of the mask is aligned with
 	 *                     the top left of the image
 	 * @param reg_paint    the clip region, in target coordinates
 	 * @param reg_visible  the visible region, in target coordinates
 	 */
-	void (*compose)(backend_t *backend_data, void *image_data,
-                    coord_t image_dst1, coord_t image_dst2,
-                    void *mask, coord_t mask_dst,
-	                const region_t *reg_paint, const region_t *reg_visible);
+	void (*compose)(backend_t *backend_data, void *image_data, coord_t image_dst,
+			void *mask, coord_t mask_dst,
+			const region_t *reg_paint, const region_t *reg_visible);
 
 	/// Fill rectangle of the rendering buffer, mostly for debug purposes, optional.
 	void (*fill)(backend_t *backend_data, struct color, const region_t *clip);

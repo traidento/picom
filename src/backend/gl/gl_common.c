@@ -546,7 +546,7 @@ void x_rect_to_coords(int nrects, const rect_t *rects, coord_t image_dst,
 
 // TODO(yshui) make use of reg_visible
 void gl_compose(backend_t *base, void *image_data,
-                coord_t image_dst, coord_t image_dst2, void *mask,
+                coord_t image_dst, void *mask,
                 coord_t mask_dst, const region_t *reg_tgt,
                 const region_t *reg_visible attr_unused) {
 	auto gd = (struct gl_data *)base;
@@ -577,8 +577,8 @@ void gl_compose(backend_t *base, void *image_data,
 
 	// Interpolate the texture coordinates into the specified range
 	for (unsigned int i = 2; i < 16; i+=4) {
-		coord[i+0] = lerp_range(0, image_dst2.x - image_dst.x, 0, inner->width, coord[i+0]);
-		coord[i+1] = lerp_range(0, image_dst2.y - image_dst.y, 0, inner->height, coord[i+1]);
+		coord[i+0] = lerp_range(0, img->ewidth, 0, inner->width, coord[i+0]);
+		coord[i+1] = lerp_range(0, img->eheight, 0, inner->height, coord[i+1]);
 	}
 
 	_gl_compose(base, img, gd->back_fbo, mask, mask_offset, coord, indices, nrects);
