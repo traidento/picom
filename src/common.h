@@ -273,7 +273,8 @@ typedef struct session {
 	/// Time of last fading. In milliseconds.
 	long long fade_time;
 	/// Time of last window animation step. In milliseconds.
-	long animation_time; // TODO(dccsillag) turn into `long long`, like fade_time
+	long animation_time;        // TODO(dccsillag) turn into `long long`, like
+	                            // fade_time
 	/// Head pointer of the error ignore linked list.
 	pending_reply_t *pending_reply_head;
 	/// Pointer to the <code>next</code> member of tail element of the error

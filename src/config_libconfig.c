@@ -229,7 +229,8 @@ static inline void parse_wintype_config(const config_t *cfg, const char *member_
 			mask->clip_shadow_above = true;
 		}
 		if (config_setting_lookup_string(setting, "animation", &sval)) {
-			enum open_window_animation animation = parse_open_window_animation(sval);
+			enum open_window_animation animation =
+			    parse_open_window_animation(sval);
 			if (animation >= OPEN_WINDOW_ANIMATION_INVALID)
 				animation = OPEN_WINDOW_ANIMATION_NONE;
 
@@ -237,7 +238,8 @@ static inline void parse_wintype_config(const config_t *cfg, const char *member_
 			mask->animation = OPEN_WINDOW_ANIMATION_INVALID;
 		}
 		if (config_setting_lookup_string(setting, "animation-unmap", &sval)) {
-			enum open_window_animation animation = parse_open_window_animation(sval);
+			enum open_window_animation animation =
+			    parse_open_window_animation(sval);
 			if (animation >= OPEN_WINDOW_ANIMATION_INVALID)
 				animation = OPEN_WINDOW_ANIMATION_NONE;
 
@@ -245,7 +247,8 @@ static inline void parse_wintype_config(const config_t *cfg, const char *member_
 			mask->animation_unmap = OPEN_WINDOW_ANIMATION_INVALID;
 		}
 		if (config_setting_lookup_string(setting, "animation-workspace-in", &sval)) {
-			enum open_window_animation animation = parse_open_window_animation(sval);
+			enum open_window_animation animation =
+			    parse_open_window_animation(sval);
 			if (animation >= OPEN_WINDOW_ANIMATION_INVALID)
 				animation = OPEN_WINDOW_ANIMATION_NONE;
 
@@ -253,7 +256,8 @@ static inline void parse_wintype_config(const config_t *cfg, const char *member_
 			mask->animation_workspace_in = OPEN_WINDOW_ANIMATION_INVALID;
 		}
 		if (config_setting_lookup_string(setting, "animation-workspace-out", &sval)) {
-			enum open_window_animation animation = parse_open_window_animation(sval);
+			enum open_window_animation animation =
+			    parse_open_window_animation(sval);
 			if (animation >= OPEN_WINDOW_ANIMATION_INVALID)
 				animation = OPEN_WINDOW_ANIMATION_NONE;
 

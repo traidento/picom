@@ -23,7 +23,7 @@ struct gl_blur_context {
 	struct texture_size {
 		int width;
 		int height;
-	} * texture_sizes;
+	} *texture_sizes;
 
 	/// Cached dimensions of the offscreen framebuffer. It's the same size as the
 	/// target but is expanded in either direction by resize_width / resize_height.

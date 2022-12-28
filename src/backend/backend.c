@@ -97,9 +97,9 @@ static void process_window_for_painting(session_t *ps, struct managed_win *w,
 	                                &reg_frame, &reg_visible_local,
 	                                (double[]){w->frame_opacity});
 	pixman_region32_fini(&reg_frame);
-	ps->backend_data->ops->compose(ps->backend_data, new_img, (coord_t){.x = w->g.x, .y = w->g.y},
-				NULL, (coord_t){0},
-				reg_paint_in_bound, reg_visible);
+	ps->backend_data->ops->compose(ps->backend_data, new_img,
+	                               (coord_t){.x = w->g.x, .y = w->g.y}, NULL,
+	                               (coord_t){0}, reg_paint_in_bound, reg_visible);
 	ps->backend_data->ops->release_image(ps->backend_data, new_img);
 	pixman_region32_fini(&reg_visible_local);
 }
@@ -502,25 +502,24 @@ void paint_all_new(session_t *ps, struct managed_win *t, bool ignore_damage) {
 			if (is_animating && w->old_win_image) {
 				assert(w->old_win_image);
 
-				bool resizing =
-					w->g.width != w->pending_g.width ||
-					w->g.height != w->pending_g.height;
+				bool resizing = w->g.width != w->pending_g.width ||
+				                w->g.height != w->pending_g.height;
 
 				// Only animate opacity here if we are resizing
 				// a transparent window
-				process_window_for_painting(ps, w, w->win_image,
-								w->opacity >= 1 ? 1.0 : w->animation_progress,
-								&reg_bound, &reg_visible,
-								&reg_paint, &reg_paint_in_bound);
+				process_window_for_painting(
+				    ps, w, w->win_image,
+				    w->opacity >= 1 ? 1.0 : w->animation_progress, &reg_bound,
+				    &reg_visible, &reg_paint, &reg_paint_in_bound);
 
-				// Only do this if size changes as otherwise moving 
+				// Only do this if size changes as otherwise moving
 				// transparent windows will flicker and if you just
 				// move so slightly they will keep flickering
 				if (resizing) {
-					process_window_for_painting(ps, w, w->old_win_image,
-									1.0 - w->animation_progress,
-									&reg_bound, &reg_visible,
-									&reg_paint, &reg_paint_in_bound);
+					process_window_for_painting(
+					    ps, w, w->old_win_image,
+					    1.0 - w->animation_progress, &reg_bound,
+					    &reg_visible, &reg_paint, &reg_paint_in_bound);
 				}
 			} else {
 				process_window_for_painting(

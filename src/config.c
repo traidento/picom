@@ -718,11 +718,13 @@ void set_default_winopts(options_t *opt, win_option_mask_t *mask, bool shadow_en
 		}
 		if (!mask[i].animation_workspace_in) {
 			mask[i].animation_workspace_in = OPEN_WINDOW_ANIMATION_INVALID;
-			opt->wintype_option[i].animation_workspace_in = OPEN_WINDOW_ANIMATION_INVALID;
+			opt->wintype_option[i].animation_workspace_in =
+			    OPEN_WINDOW_ANIMATION_INVALID;
 		}
 		if (!mask[i].animation_workspace_out) {
 			mask[i].animation_workspace_out = OPEN_WINDOW_ANIMATION_INVALID;
-			opt->wintype_option[i].animation_workspace_out = OPEN_WINDOW_ANIMATION_INVALID;
+			opt->wintype_option[i].animation_workspace_out =
+			    OPEN_WINDOW_ANIMATION_INVALID;
 		}
 		if (!mask[i].clip_shadow_above) {
 			mask[i].clip_shadow_above = true;

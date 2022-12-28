@@ -180,8 +180,8 @@ struct backend_operations {
 	 * @param reg_visible  the visible region, in target coordinates
 	 */
 	void (*compose)(backend_t *backend_data, void *image_data, coord_t image_dst,
-			void *mask, coord_t mask_dst,
-			const region_t *reg_paint, const region_t *reg_visible);
+	                void *mask, coord_t mask_dst, const region_t *reg_paint,
+	                const region_t *reg_visible);
 
 	/// Fill rectangle of the rendering buffer, mostly for debug purposes, optional.
 	void (*fill)(backend_t *backend_data, struct color, const region_t *clip);
