@@ -36,9 +36,9 @@
 #include <X11/Xlib.h>
 #include <ev.h>
 #include <pixman.h>
-#include <xcb/xproto.h>
 #include <xcb/render.h>
 #include <xcb/sync.h>
+#include <xcb/xproto.h>
 
 #include "uthash_extra.h"
 #ifdef CONFIG_OPENGL
@@ -55,11 +55,11 @@
 #include "backend/driver.h"
 #include "compiler.h"
 #include "config.h"
+#include "list.h"
 #include "region.h"
+#include "render.h"
 #include "types.h"
 #include "utils.h"
-#include "list.h"
-#include "render.h"
 #include "win_defs.h"
 #include "x.h"
 
@@ -83,10 +83,17 @@ struct glx_session;
 struct atom;
 struct conv;
 
-typedef struct _ignore {
-	struct _ignore *next;
+enum pending_reply_action {
+	PENDING_REPLY_ACTION_IGNORE,
+	PENDING_REPLY_ACTION_ABORT,
+	PENDING_REPLY_ACTION_DEBUG_ABORT,
+};
+
+typedef struct pending_reply {
+	struct pending_reply *next;
 	unsigned long sequence;
-} ignore_t;
+	enum pending_reply_action action;
+} pending_reply_t;
 
 #ifdef CONFIG_OPENGL
 #ifdef DEBUG_GLX_DEBUG_CONTEXT
@@ -143,6 +150,8 @@ typedef struct session {
 	// === Event handlers ===
 	/// ev_io for X connection
 	ev_io xiow;
+	/// Timer for checking DPMS power level
+	ev_timer dpms_check_timer;
 	/// Timeout for delayed unredirection.
 	ev_timer unredir_timer;
 	/// Timer for fading
@@ -152,7 +161,7 @@ typedef struct session {
 	/// Use an ev_idle callback for drawing
 	/// So we only start drawing when events are processed
 	ev_idle draw_idle;
-	/// Called everytime we have timeouts or new data on socket,
+	/// Called every time we have timeouts or new data on socket,
 	/// so we can be sure if xcb read from X socket at anytime during event
 	/// handling, we will not left any event unhandled in the queue
 	ev_prepare event_check;
@@ -235,6 +244,8 @@ typedef struct session {
 	xcb_sync_fence_t sync_fence;
 	/// Whether we are rendering the first frame after screen is redirected
 	bool first_frame;
+	/// Whether screen has been turned off
+	bool screen_is_off;
 
 	// === Operation related ===
 	/// Flags related to the root window
@@ -246,7 +257,7 @@ typedef struct session {
 	/// Whether we need to redraw the screen
 	bool redraw_needed;
 
-	/// Cache a xfixes region so we don't need to allocate it everytime.
+	/// Cache a xfixes region so we don't need to allocate it every time.
 	/// A workaround for yshui/picom#301
 	xcb_xfixes_region_t damaged_region;
 	/// The region needs to painted on next paint.
@@ -264,18 +275,18 @@ typedef struct session {
 	/// Time of last window animation step. In milliseconds.
 	long animation_time; // TODO(dccsillag) turn into `long long`, like fade_time
 	/// Head pointer of the error ignore linked list.
-	ignore_t *ignore_head;
+	pending_reply_t *pending_reply_head;
 	/// Pointer to the <code>next</code> member of tail element of the error
 	/// ignore linked list.
-	ignore_t **ignore_tail;
+	pending_reply_t **pending_reply_tail;
 	// Cached blur convolution kernels.
 	struct x_convolution_kernel **blur_kerns_cache;
 	/// If we should quit
-	bool quit:1;
+	bool quit : 1;
 	// TODO(yshui) use separate flags for dfferent kinds of updates so we don't
 	// waste our time.
 	/// Whether there are pending updates, like window creation, etc.
-	bool pending_updates:1;
+	bool pending_updates : 1;
 
 	// === Expose event related ===
 	/// Pointer to an array of <code>XRectangle</code>-s of exposed region.
@@ -343,6 +354,8 @@ typedef struct session {
 	int composite_error;
 	/// Major opcode for X Composite extension.
 	int composite_opcode;
+	/// Whether X DPMS extension exists
+	bool dpms_exists;
 	/// Whether X Shape extension exists.
 	bool shape_exists;
 	/// Event base number for X Shape extension.
@@ -476,25 +489,33 @@ static inline bool bkend_use_glx(session_t *ps) {
 	return BKEND_GLX == ps->o.backend || BKEND_XR_GLX_HYBRID == ps->o.backend;
 }
 
-static void set_ignore(session_t *ps, unsigned long sequence) {
-	if (ps->o.show_all_xerrors)
-		return;
-
-	auto i = cmalloc(ignore_t);
-	if (!i)
-		return;
+static void
+set_reply_action(session_t *ps, uint32_t sequence, enum pending_reply_action action) {
+	auto i = cmalloc(pending_reply_t);
+	if (!i) {
+		abort();
+	}
 
 	i->sequence = sequence;
 	i->next = 0;
-	*ps->ignore_tail = i;
-	ps->ignore_tail = &i->next;
+	i->action = action;
+	*ps->pending_reply_tail = i;
+	ps->pending_reply_tail = &i->next;
 }
 
 /**
  * Ignore X errors caused by given X request.
  */
 static inline void set_ignore_cookie(session_t *ps, xcb_void_cookie_t cookie) {
-	set_ignore(ps, cookie.sequence);
+	if (ps->o.show_all_xerrors) {
+		return;
+	}
+
+	set_reply_action(ps, cookie.sequence, PENDING_REPLY_ACTION_IGNORE);
+}
+
+static inline void set_cant_fail_cookie(session_t *ps, xcb_void_cookie_t cookie) {
+	set_reply_action(ps, cookie.sequence, PENDING_REPLY_ACTION_ABORT);
 }
 
 /**

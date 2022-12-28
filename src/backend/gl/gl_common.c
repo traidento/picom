@@ -635,7 +635,7 @@ void gl_resize(struct gl_data *gd, int width, int height) {
 	assert(viewport_dimensions[1] >= gd->height);
 
 	glBindTexture(GL_TEXTURE_2D, gd->back_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_BGR,
+	glTexImage2D(GL_TEXTURE_2D, 0, gd->back_format, width, height, 0, GL_BGR,
 	             GL_UNSIGNED_BYTE, NULL);
 
 	gl_check_err();
@@ -881,7 +881,16 @@ bool gl_init(struct gl_data *gd, session_t *ps) {
 	glUniformMatrix4fv(pml, 1, false, projection_matrix[0]);
 	glUseProgram(0);
 
-	gd->present_prog = gl_create_program_from_str(present_vertex_shader, dummy_frag);
+	gd->dithered_present = ps->o.dithered_present;
+	if (gd->dithered_present) {
+		gd->present_prog = gl_create_program_from_strv(
+		    (const char *[]){present_vertex_shader, NULL},
+		    (const char *[]){present_frag, dither_glsl, NULL});
+	} else {
+		gd->present_prog = gl_create_program_from_strv(
+		    (const char *[]){present_vertex_shader, NULL},
+		    (const char *[]){dummy_frag, NULL});
+	}
 	if (!gd->present_prog) {
 		log_error("Failed to create the present shader");
 		return false;
@@ -915,14 +924,23 @@ bool gl_init(struct gl_data *gd, session_t *ps) {
 	glUniformMatrix4fv(pml, 1, false, projection_matrix[0]);
 	glUseProgram(0);
 
-	// Set up the size of the back texture
-	gl_resize(gd, ps->root_width, ps->root_height);
-
+	// Set up the size and format of the back texture
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gd->back_fbo);
-	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-	                       gd->back_texture, 0);
 	glDrawBuffer(GL_COLOR_ATTACHMENT0);
-	if (!gl_check_fb_complete(GL_FRAMEBUFFER)) {
+	const GLint *format = gd->dithered_present ? (const GLint[]){GL_RGB16, GL_RGBA16}
+	                                           : (const GLint[]){GL_RGB8, GL_RGBA8};
+	for (int i = 0; i < 2; i++) {
+		gd->back_format = format[i];
+		gl_resize(gd, ps->root_width, ps->root_height);
+
+		glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		                       GL_TEXTURE_2D, gd->back_texture, 0);
+		if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+			log_info("Using back buffer format %#x", gd->back_format);
+			break;
+		}
+	}
+	if (!gl_check_fb_complete(GL_DRAW_FRAMEBUFFER)) {
 		return false;
 	}
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -1182,18 +1200,28 @@ struct gl_shadow_context {
 struct backend_shadow_context *gl_create_shadow_context(backend_t *base, double radius) {
 	auto ctx = ccalloc(1, struct gl_shadow_context);
 	ctx->radius = radius;
+	ctx->blur_context = NULL;
 
-	struct gaussian_blur_args args = {
-	    .size = (int)radius,
-	    .deviation = gaussian_kernel_std_for_size(radius, 0.5 / 256.0),
-	};
-	ctx->blur_context = gl_create_blur_context(base, BLUR_METHOD_GAUSSIAN, &args);
+	if (radius > 0) {
+		struct gaussian_blur_args args = {
+		    .size = (int)radius,
+		    .deviation = gaussian_kernel_std_for_size(radius, 0.5 / 256.0),
+		};
+		ctx->blur_context = gl_create_blur_context(base, BLUR_METHOD_GAUSSIAN, &args);
+		if (!ctx->blur_context) {
+			log_error("Failed to create shadow context");
+			free(ctx);
+			return NULL;
+		}
+	}
 	return (struct backend_shadow_context *)ctx;
 }
 
 void gl_destroy_shadow_context(backend_t *base attr_unused, struct backend_shadow_context *ctx) {
 	auto ctx_ = (struct gl_shadow_context *)ctx;
-	gl_destroy_blur_context(base, (struct backend_blur_context *)ctx_->blur_context);
+	if (ctx_->blur_context) {
+		gl_destroy_blur_context(base, (struct backend_blur_context *)ctx_->blur_context);
+	}
 	free(ctx_);
 }
 
@@ -1221,6 +1249,8 @@ void *gl_shadow_from_mask(backend_t *base, void *mask,
 	auto source_texture = gl_new_texture(GL_TEXTURE_2D);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, source_texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, new_inner->width, new_inner->height, 0,
 	             GL_RED, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);
@@ -1252,27 +1282,32 @@ void *gl_shadow_from_mask(backend_t *base, void *mask,
 
 	gl_check_err();
 
-	glActiveTexture(GL_TEXTURE0);
-	auto tmp_texture = gl_new_texture(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, tmp_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, new_inner->width, new_inner->height, 0,
-	             GL_RED, GL_UNSIGNED_BYTE, NULL);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	auto tmp_texture = source_texture;
+	if (gsctx->blur_context != NULL) {
+		glActiveTexture(GL_TEXTURE0);
+		tmp_texture = gl_new_texture(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, tmp_texture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, new_inner->width,
+		             new_inner->height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+		glBindTexture(GL_TEXTURE_2D, 0);
 
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
-	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-	                       tmp_texture, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+		glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		                       GL_TEXTURE_2D, tmp_texture, 0);
 
-	region_t reg_blur;
-	pixman_region32_init_rect(&reg_blur, 0, 0, (unsigned int)new_inner->width,
-	                          (unsigned int)new_inner->height);
-	// gl_blur expects reg_blur to be in X coordinate system (i.e. y flipped), but we
-	// are covering the whole texture so we don't need to worry about that.
-	gl_blur_impl(1.0, gsctx->blur_context, NULL, (coord_t){0}, &reg_blur, NULL,
-	             source_texture,
-	             (geometry_t){.width = new_inner->width, .height = new_inner->height},
-	             fbo, gd->default_mask_texture);
-	pixman_region32_fini(&reg_blur);
+		region_t reg_blur;
+		pixman_region32_init_rect(&reg_blur, 0, 0, (unsigned int)new_inner->width,
+		                          (unsigned int)new_inner->height);
+		// gl_blur expects reg_blur to be in X coordinate system (i.e. y flipped),
+		// but we are covering the whole texture so we don't need to worry about
+		// that.
+		gl_blur_impl(
+		    1.0, gsctx->blur_context, NULL, (coord_t){0}, &reg_blur, NULL,
+		    source_texture,
+		    (geometry_t){.width = new_inner->width, .height = new_inner->height},
+		    fbo, gd->default_mask_texture, gd->dithered_present);
+		pixman_region32_fini(&reg_blur);
+	}
 
 	// Colorize the shadow with color.
 	log_debug("Colorize shadow");
@@ -1324,7 +1359,10 @@ void *gl_shadow_from_mask(backend_t *base, void *mask,
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	glDeleteBuffers(2, bo);
 
-	glDeleteTextures(1, (GLuint[]){source_texture, tmp_texture});
+	glDeleteTextures(1, (GLuint[]){source_texture});
+	if (tmp_texture != source_texture) {
+		glDeleteTextures(1, (GLuint[]){tmp_texture});
+	}
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glDeleteFramebuffers(1, &fbo);
 	gl_check_err();

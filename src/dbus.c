@@ -1153,7 +1153,7 @@ static bool cdbus_process_opts_get(session_t *ps, DBusMessage *msg) {
 
 	// version
 	if (!strcmp("version", target)) {
-		cdbus_reply_string(ps, msg, COMPTON_VERSION);
+		cdbus_reply_string(ps, msg, PICOM_VERSION);
 		return true;
 	}
 
@@ -1435,7 +1435,10 @@ static bool cdbus_process_windows_root_introspect(session_t *ps, DBusMessage *ms
 			continue;
 		}
 		char *tmp = NULL;
-		asprintf(&tmp, "<node name='%#010x'/>\n", w->id);
+		if (asprintf(&tmp, "<node name='%#010x'/>\n", w->id) < 0) {
+			log_fatal("Failed to allocate memory.");
+			abort();
+		}
 		mstrextend(&ret, tmp);
 		free(tmp);
 	}

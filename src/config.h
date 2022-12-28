@@ -304,6 +304,11 @@ typedef struct options {
 	// Make transparent windows clip other windows, instead of blending on top of
 	// them
 	bool transparent_clipping;
+	/// A list of conditions of windows to which transparent clipping
+	/// should not apply
+	c2_lptr_t *transparent_clipping_blacklist;
+
+	bool dithered_present;
 } options_t;
 
 extern const char *const BACKEND_STRS[NUM_BKEND + 1];

@@ -16,7 +16,8 @@ cflags = []
 
 required_xcb_packages = [
 	'xcb-render', 'xcb-damage', 'xcb-randr', 'xcb-sync', 'xcb-composite',
-	'xcb-shape', 'xcb-xinerama', 'xcb-xfixes', 'xcb-present', 'xcb-glx', 'xcb'
+	'xcb-shape', 'xcb-xinerama', 'xcb-xfixes', 'xcb-present', 'xcb-glx', 
+	'xcb-dpms', 'xcb'
 ]
 
 required_packages = [
@@ -44,11 +45,8 @@ if get_option('config_file')
 	srcs += [ 'config_libconfig.c' ]
 endif
 if get_option('regex')
-	pcre = dependency('libpcre', required: true)
+	pcre = dependency('libpcre2-8', required: true)
 	cflags += ['-DCONFIG_REGEX_PCRE']
-	if pcre.version().version_compare('>=8.20')
-		cflags += ['-DCONFIG_REGEX_PCRE_JIT']
-	endif
 	deps += [pcre]
 endif
 

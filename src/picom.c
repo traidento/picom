@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <xcb/composite.h>
 #include <xcb/damage.h>
+#include <xcb/dpms.h>
 #include <xcb/glx.h>
 #include <xcb/present.h>
 #include <xcb/randr.h>
@@ -169,6 +170,26 @@ void cxinerama_upd_scrs(session_t *ps) {
 	free(xinerama_scrs);
 }
 
+static inline bool dpms_screen_is_off(xcb_dpms_info_reply_t *info) {
+	// state is a bool indicating whether dpms is enabled
+	return info->state && (info->power_level != XCB_DPMS_DPMS_MODE_ON);
+}
+
+void check_dpms_status(EV_P attr_unused, ev_timer *w, int revents attr_unused) {
+	auto ps = session_ptr(w, dpms_check_timer);
+	auto r = xcb_dpms_info_reply(ps->c, xcb_dpms_info(ps->c), NULL);
+	if (!r) {
+		log_fatal("Failed to query DPMS status.");
+		abort();
+	}
+	auto now_screen_is_off = dpms_screen_is_off(r);
+	if (ps->screen_is_off != now_screen_is_off) {
+		ps->screen_is_off = now_screen_is_off;
+		queue_redraw(ps);
+	}
+	free(r);
+}
+
 /**
  * Find matched window.
  *
@@ -282,14 +303,14 @@ static bool run_fade(session_t *ps, struct managed_win **_w, long long steps) {
 
 // === Error handling ===
 
-void discard_ignore(session_t *ps, unsigned long sequence) {
-	while (ps->ignore_head) {
-		if (sequence > ps->ignore_head->sequence) {
-			ignore_t *next = ps->ignore_head->next;
-			free(ps->ignore_head);
-			ps->ignore_head = next;
-			if (!ps->ignore_head) {
-				ps->ignore_tail = &ps->ignore_head;
+void discard_pending(session_t *ps, uint32_t sequence) {
+	while (ps->pending_reply_head) {
+		if (sequence > ps->pending_reply_head->sequence) {
+			auto next = ps->pending_reply_head->next;
+			free(ps->pending_reply_head);
+			ps->pending_reply_head = next;
+			if (!ps->pending_reply_head) {
+				ps->pending_reply_tail = &ps->pending_reply_head;
 			}
 		} else {
 			break;
@@ -297,13 +318,28 @@ void discard_ignore(session_t *ps, unsigned long sequence) {
 	}
 }
 
-static int should_ignore(session_t *ps, unsigned long sequence) {
+static void handle_error(session_t *ps, xcb_generic_error_t *ev) {
 	if (ps == NULL) {
 		// Do not ignore errors until the session has been initialized
-		return false;
+		return;
 	}
-	discard_ignore(ps, sequence);
-	return ps->ignore_head && ps->ignore_head->sequence == sequence;
+	discard_pending(ps, ev->full_sequence);
+	if (ps->pending_reply_head && ps->pending_reply_head->sequence == ev->full_sequence) {
+		if (ps->pending_reply_head->action != PENDING_REPLY_ACTION_IGNORE) {
+			x_log_error(LOG_LEVEL_ERROR, ev->full_sequence, ev->major_code,
+			            ev->minor_code, ev->error_code);
+		}
+		switch (ps->pending_reply_head->action) {
+		case PENDING_REPLY_ACTION_ABORT:
+			log_fatal("An unrecoverable X error occurred, aborting...");
+			abort();
+		case PENDING_REPLY_ACTION_DEBUG_ABORT: assert(false); break;
+		case PENDING_REPLY_ACTION_IGNORE: break;
+		}
+		return;
+	}
+	x_log_error(LOG_LEVEL_WARN, ev->full_sequence, ev->major_code, ev->minor_code,
+	            ev->error_code);
 }
 
 // === Windows ===
@@ -539,8 +575,8 @@ static bool initialize_backend(session_t *ps) {
 				} else {
 					shader->attributes = 0;
 				}
-				log_debug("Shader %s has attributes %ld", shader->key,
-				          shader->attributes);
+				log_debug("Shader %s has attributes %" PRIu64,
+				          shader->key, shader->attributes);
 			}
 		}
 
@@ -1030,7 +1066,7 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 		// we add the window region to the ignored region
 		// Otherwise last_reg_ignore shouldn't change
 		if ((w->mode != WMODE_TRANS && !ps->o.force_win_blend) ||
-		    ps->o.transparent_clipping) {
+		    (ps->o.transparent_clipping && !w->transparent_clipping_excluded)) {
 			// w->mode == WMODE_SOLID or WMODE_FRAME_TRANS
 			region_t *tmp = rc_region_new();
 			if (w->mode == WMODE_SOLID) {
@@ -1104,6 +1140,19 @@ paint_preprocess(session_t *ps, bool *fade_running, bool *animation_running) {
 		// If there's no window to paint, and the screen isn't redirected,
 		// don't redirect it.
 		unredir_possible = true;
+	} else if (ps->screen_is_off) {
+		// Screen is off, unredirect
+		// We do this unconditionally disregarding "unredir_if_possible"
+		// because it's important for correctness, because we need to
+		// workaround problems X server has around screen off.
+		//
+		// Known problems:
+		//   1. Sometimes OpenGL front buffer can lose content, and if we
+		//      are doing partial updates (i.e. use-damage = true), the
+		//      result will be wrong.
+		//   2. For frame pacing, X server sends bogus
+		//      PresentCompleteNotify events when screen is off.
+		unredir_possible = true;
 	}
 	if (unredir_possible) {
 		if (ps->redirected) {
@@ -1163,9 +1212,13 @@ void root_damaged(session_t *ps) {
  * Xlib error handler function.
  */
 static int xerror(Display attr_unused *dpy, XErrorEvent *ev) {
-	if (!should_ignore(ps_g, ev->serial)) {
-		x_print_error(ev->serial, ev->request_code, ev->minor_code, ev->error_code);
-	}
+	// Fake a xcb error, fill in just enough information
+	xcb_generic_error_t xcb_err;
+	xcb_err.full_sequence = (uint32_t)ev->serial;
+	xcb_err.major_code = ev->request_code;
+	xcb_err.minor_code = ev->minor_code;
+	xcb_err.error_code = ev->error_code;
+	handle_error(ps_g, &xcb_err);
 	return 0;
 }
 
@@ -1173,9 +1226,7 @@ static int xerror(Display attr_unused *dpy, XErrorEvent *ev) {
  * XCB error handler function.
  */
 void ev_xcb_error(session_t *ps, xcb_generic_error_t *err) {
-	if (!should_ignore(ps, err->sequence)) {
-		x_print_error(err->sequence, err->major_code, err->minor_code, err->error_code);
-	}
+	handle_error(ps, err);
 }
 
 /**
@@ -1291,7 +1342,7 @@ static int register_cm(session_t *ps) {
 	    ps->c, xcb_change_property_checked(
 	               ps->c, XCB_PROP_MODE_REPLACE, ps->reg_win,
 	               get_atom(ps->atoms, "COMPTON_VERSION"), XCB_ATOM_STRING, 8,
-	               (uint32_t)strlen(COMPTON_VERSION), COMPTON_VERSION));
+	               (uint32_t)strlen(PICOM_VERSION), PICOM_VERSION));
 	if (e) {
 		log_error_x_error(e, "Failed to set COMPTON_VERSION.");
 		free(e);
@@ -1893,8 +1944,8 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	    .alpha_picts = NULL,
 	    .fade_time = 0L,
 	    .animation_time = 0L,
-	    .ignore_head = NULL,
-	    .ignore_tail = NULL,
+	    .pending_reply_head = NULL,
+	    .pending_reply_tail = NULL,
 	    .quit = false,
 
 	    .expose_rects = NULL,
@@ -1956,7 +2007,7 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ps->loop = EV_DEFAULT;
 	pixman_region32_init(&ps->screen_reg);
 
-	ps->ignore_tail = &ps->ignore_head;
+	ps->pending_reply_tail = &ps->pending_reply_head;
 
 	ps->o.show_all_xerrors = all_xerrors;
 
@@ -1999,6 +2050,7 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	xcb_prefetch_extension_data(ps->c, &xcb_present_id);
 	xcb_prefetch_extension_data(ps->c, &xcb_sync_id);
 	xcb_prefetch_extension_data(ps->c, &xcb_glx_id);
+	xcb_prefetch_extension_data(ps->c, &xcb_dpms_id);
 
 	ext_info = xcb_get_extension_data(ps->c, &xcb_render_id);
 	if (!ext_info || !ext_info->present) {
@@ -2065,6 +2117,21 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 		ps->glx_exists = true;
 		ps->glx_error = ext_info->first_error;
 		ps->glx_event = ext_info->first_event;
+	}
+
+	ext_info = xcb_get_extension_data(ps->c, &xcb_dpms_id);
+	ps->dpms_exists = ext_info && ext_info->present;
+	if (ps->dpms_exists) {
+		auto r = xcb_dpms_info_reply(ps->c, xcb_dpms_info(ps->c), NULL);
+		if (!r) {
+			log_fatal("Failed to query DPMS info");
+			goto err;
+		}
+		ps->screen_is_off = dpms_screen_is_off(r);
+		// Check screen status every half second
+		ev_timer_init(&ps->dpms_check_timer, check_dpms_status, 0, 0.5);
+		ev_timer_start(ps->loop, &ps->dpms_check_timer);
+		free(r);
 	}
 
 	// Parse configuration file
@@ -2546,26 +2613,28 @@ static void session_destroy(session_t *ps) {
 
 	// Free ignore linked list
 	{
-		ignore_t *next = NULL;
-		for (ignore_t *ign = ps->ignore_head; ign; ign = next) {
+		pending_reply_t *next = NULL;
+		for (auto ign = ps->pending_reply_head; ign; ign = next) {
 			next = ign->next;
 
 			free(ign);
 		}
 
 		// Reset head and tail
-		ps->ignore_head = NULL;
-		ps->ignore_tail = &ps->ignore_head;
+		ps->pending_reply_head = NULL;
+		ps->pending_reply_tail = &ps->pending_reply_head;
 	}
 
 	// Free tgt_{buffer,picture} and root_picture
-	if (ps->tgt_buffer.pict == ps->tgt_picture)
+	if (ps->tgt_buffer.pict == ps->tgt_picture) {
 		ps->tgt_buffer.pict = XCB_NONE;
+	}
 
-	if (ps->tgt_picture == ps->root_picture)
+	if (ps->tgt_picture == ps->root_picture) {
 		ps->tgt_picture = XCB_NONE;
-	else
+	} else {
 		free_picture(ps->c, &ps->tgt_picture);
+	}
 
 	free_picture(ps->c, &ps->root_picture);
 	free_paint(ps, &ps->tgt_buffer);
@@ -2660,6 +2729,7 @@ static void session_destroy(session_t *ps) {
 	// Stop libev event handlers
 	ev_timer_stop(ps->loop, &ps->unredir_timer);
 	ev_timer_stop(ps->loop, &ps->fade_timer);
+	ev_timer_stop(ps->loop, &ps->dpms_check_timer);
 	ev_timer_stop(ps->loop, &ps->animation_timer);
 	ev_idle_stop(ps->loop, &ps->draw_idle);
 	ev_prepare_stop(ps->loop, &ps->event_check);
@@ -2777,7 +2847,11 @@ int main(int argc, char **argv) {
 			// Notify the parent that we are done. This might cause the parent
 			// to quit, so only do this after setsid()
 			int tmp = 1;
-			write(pfds[1], &tmp, sizeof tmp);
+			if (write(pfds[1], &tmp, sizeof tmp) != sizeof tmp) {
+				log_fatal("Failed to notify parent process");
+				ret_code = 1;
+				break;
+			}
 			close(pfds[1]);
 			// We only do this once
 			need_fork = false;

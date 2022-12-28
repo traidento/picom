@@ -354,10 +354,11 @@ static inline bool win_bind_pixmap(struct backend_base *b, struct managed_win *w
 }
 
 bool win_bind_mask(struct backend_base *b, struct managed_win *w) {
+	assert(!w->mask_image);
 	auto reg_bound_local = win_get_bounding_shape_global_by_val(w);
 	pixman_region32_translate(&reg_bound_local, -w->g.x, -w->g.y);
 	w->mask_image = b->ops->make_mask(
-	    b, (geometry_t){.width = w->g.width, .height = w->g.height}, &reg_bound_local);
+	    b, (geometry_t){.width = w->widthb, .height = w->heightb}, &reg_bound_local);
 	pixman_region32_fini(&reg_bound_local);
 
 	if (!w->mask_image) {
@@ -1527,6 +1528,9 @@ void win_on_factor_change(session_t *ps, struct managed_win *w) {
 
 	w->fade_excluded = c2_match(ps, w, ps->o.fade_blacklist, NULL);
 
+	w->transparent_clipping_excluded =
+	    c2_match(ps, w, ps->o.transparent_clipping_blacklist, NULL);
+
 	win_update_opacity_target(ps, w);
 
 	w->reg_ignore_valid = false;
@@ -1877,6 +1881,7 @@ struct win *fill_win(session_t *ps, struct win *w) {
 	    .rounded_corners = false,
 	    .paint_excluded = false,
 	    .fade_excluded = false,
+	    .transparent_clipping_excluded = false,
 	    .unredir_if_possible_excluded = false,
 	    .prop_shadow = -1,
 	    // following 4 are set in win_mark_client
@@ -2459,6 +2464,7 @@ static void destroy_win_finish(session_t *ps, struct win *w) {
 			assert(mw->shadow_image != NULL);
 			win_release_shadow(ps->backend_data, mw);
 		}
+		win_release_mask(ps->backend_data, mw);
 
 		// Invalidate reg_ignore of windows below this one
 		// TODO(yshui) what if next_w is not mapped??

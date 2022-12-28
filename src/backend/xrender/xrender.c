@@ -277,13 +277,6 @@ compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg, coord_t dst,
 		xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_OVER, inner->pict,
 		                     XCB_NONE, tmp_pict, 0, 0, 0, 0, 0, 0, tmpw, tmph);
 
-		if (img->corner_radius != 0 && xrimg->rounded_rectangle != NULL) {
-			// Clip tmp_pict with a rounded rectangle
-			xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_IN_REVERSE,
-			                     xrimg->rounded_rectangle->p, XCB_NONE,
-			                     tmp_pict, 0, 0, 0, 0, 0, 0, tmpw, tmph);
-		}
-
 		if (img->color_inverted) {
 			if (inner->has_alpha) {
 				auto tmp_pict2 = x_create_picture_with_visual(
@@ -306,6 +299,7 @@ compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg, coord_t dst,
 				                     0, 0, 0, 0, 0, 0, tmpw, tmph);
 			}
 		}
+
 		if (img->dim != 0) {
 			// Dim the actually content of window
 			xcb_rectangle_t rect = {
@@ -317,6 +311,13 @@ compose_impl(struct _xrender_data *xd, struct xrender_image *xrimg, coord_t dst,
 
 			xcb_render_fill_rectangles(xd->base.c, XCB_RENDER_PICT_OP_OVER,
 			                           tmp_pict, dim_color, 1, &rect);
+		}
+
+		if (img->corner_radius != 0 && xrimg->rounded_rectangle != NULL) {
+			// Clip tmp_pict with a rounded rectangle
+			xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_IN_REVERSE,
+			                     xrimg->rounded_rectangle->p, XCB_NONE,
+			                     tmp_pict, 0, 0, 0, 0, 0, 0, tmpw, tmph);
 		}
 
 		xcb_render_composite(xd->base.c, XCB_RENDER_PICT_OP_OVER, tmp_pict,
@@ -521,6 +522,7 @@ bind_pixmap(backend_t *base, xcb_pixmap_t pixmap, struct xvisual_info fmt, bool 
 	if (!r) {
 		log_error("Invalid pixmap: %#010x", pixmap);
 		x_print_error(e->full_sequence, e->major_code, e->minor_code, e->error_code);
+		free(e);
 		return NULL;
 	}
 
@@ -566,7 +568,7 @@ release_rounded_corner_cache(backend_t *base, struct xrender_rounded_rectangle_c
 	assert(cache->refcount > 0);
 	cache->refcount--;
 	if (cache->refcount == 0) {
-		xcb_free_pixmap(base->c, cache->p);
+		xcb_render_free_picture(base->c, cache->p);
 		free(cache);
 	}
 }
@@ -588,9 +590,13 @@ static void deinit(backend_t *backend_data) {
 		xcb_render_free_picture(xd->base.c, xd->alpha_pict[i]);
 	}
 	xcb_render_free_picture(xd->base.c, xd->target);
-	for (int i = 0; i < 2; i++) {
-		xcb_render_free_picture(xd->base.c, xd->back[i]);
-		xcb_free_pixmap(xd->base.c, xd->back_pixmap[i]);
+	for (int i = 0; i < 3; i++) {
+		if (xd->back[i] != XCB_NONE) {
+			xcb_render_free_picture(xd->base.c, xd->back[i]);
+		}
+		if (xd->back_pixmap[i] != XCB_NONE) {
+			xcb_free_pixmap(xd->base.c, xd->back_pixmap[i]);
+		}
 	}
 	if (xd->present_event) {
 		xcb_unregister_for_special_event(xd->base.c, xd->present_event);
@@ -607,25 +613,28 @@ static void present(backend_t *base, const region_t *region) {
 	uint16_t region_width = to_u16_checked(extent->x2 - extent->x1),
 	         region_height = to_u16_checked(extent->y2 - extent->y1);
 
-	// compose() sets clip region on the back buffer, so clear it first
-	x_clear_picture_clip_region(base->c, xd->back[xd->curr_back]);
-
 	// limit the region of update
 	x_set_picture_clip_region(base->c, xd->back[2], 0, 0, region);
 
 	if (xd->vsync) {
+		// compose() sets clip region on the back buffer, so clear it first
+		x_clear_picture_clip_region(base->c, xd->back[xd->curr_back]);
+
 		// Update the back buffer first, then present
 		xcb_render_composite(base->c, XCB_RENDER_PICT_OP_SRC, xd->back[2],
 		                     XCB_NONE, xd->back[xd->curr_back], orig_x, orig_y, 0,
 		                     0, orig_x, orig_y, region_width, region_height);
+
+		auto xregion = x_create_region(base->c, region);
 
 		// Make sure we got reply from PresentPixmap before waiting for events,
 		// to avoid deadlock
 		auto e = xcb_request_check(
 		    base->c, xcb_present_pixmap_checked(
 		                 xd->base.c, xd->target_win,
-		                 xd->back_pixmap[xd->curr_back], 0, XCB_NONE, XCB_NONE, 0,
+		                 xd->back_pixmap[xd->curr_back], 0, XCB_NONE, xregion, 0,
 		                 0, XCB_NONE, XCB_NONE, XCB_NONE, 0, 0, 0, 0, 0, NULL));
+		x_destroy_region(base->c, xregion);
 		if (e) {
 			log_error("Failed to present pixmap");
 			free(e);
@@ -871,6 +880,10 @@ static void get_blur_size(void *blur_context, int *width, int *height) {
 }
 
 static backend_t *backend_xrender_init(session_t *ps) {
+	if (ps->o.dithered_present) {
+		log_warn("\"dithered-present\" is not supported by the xrender backend.");
+	}
+
 	auto xd = ccalloc(1, struct _xrender_data);
 	init_backend_base(&xd->base, ps);
 
